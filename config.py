@@ -1,0 +1,2 @@
+DEFAULT_FILE_INDENT = 3
+MUSIC_PLAYER_PREFIX = "[= MusicPlayer =]"

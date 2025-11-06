@@ -5,8 +5,9 @@ from typing import List, Dict, Any, Optional
 from datetime import timedelta
 from xml.etree import ElementTree
 import xml.dom.minidom as minidom
+import time
 
-from config import DEFAULT_INDENT
+from config import DEFAULT_FILE_INDENT, MUSIC_PLAYER_PREFIX
 from errors import DataError, EmptyValueError, InvalidTypeError, CustomIndexError
 from utils import validate_str, validate_list
 
@@ -32,12 +33,12 @@ class AudioBookGenre(Enum):
 
 
 class Permission(Enum):
-    """Перечисляемый класс, описывающий привелегии администратора"""
+    """Перечисляемый класс, описывающий привилегии администратора"""
 
     VIEW_USERS = "view_users"
     EDIT_USERS = "edit_users"
     BAN_USERS = "ban_users"
-    USE_PLAYGROUND = "see_analytics"
+    SEE_ANALYTICS = "see_analytics"
     INVITE_ADMINS = "invite_admins"
 
 
@@ -52,7 +53,6 @@ class Serializable(ABC):
     @abstractmethod
     def serialize(self):
         pass
-
 
     @classmethod
     @abstractmethod
@@ -70,7 +70,6 @@ class FileHandler(ABC):
     @abstractmethod
     def save(self, data: List[Serializable], filename: str):
         pass
-
 
     @classmethod
     @abstractmethod
@@ -90,7 +89,7 @@ class JSONFileHandler(FileHandler):
 
     def save(self, data: List[Serializable], filename: str):
         with open(filename, "w", encoding="utf-8") as file:
-            json.dump([item.serialize() for item in data], file, indent=DEFAULT_INDENT, ensure_ascii=False)
+            json.dump([item.serialize() for item in data], file, indent=DEFAULT_FILE_INDENT, ensure_ascii=False)
 
 
     def load(self, filename: str) -> List[Dict[str, Any]]:
@@ -113,11 +112,10 @@ class XMLFileHandler(FileHandler):
                     child.text = str(value)
 
         tree = ElementTree.tostring(root, encoding="utf-8")
-        decorated_tree = minidom.parseString(tree).toprettyxml(indent=" " * DEFAULT_INDENT)
+        decorated_tree = minidom.parseString(tree).toprettyxml(indent=" " * DEFAULT_FILE_INDENT)
 
         with open(filename, "w", encoding="utf-8") as file:
             file.write(decorated_tree)
-
 
     def load(self, filename: str) -> List[Dict[str, Any]]:
         tree = ElementTree.parse(filename)
@@ -160,7 +158,6 @@ class Person(Serializable):
         self._name = name
         self._email = email
 
-
     def __str__(self):
         return (
             f"ID: {self._person_id}\n"
@@ -168,11 +165,9 @@ class Person(Serializable):
             f"Почта: {self._email}\n"
         )
 
-
     @property
     def person_id(self) -> str:
         return self._person_id
-
 
     @person_id.setter
     def person_id(self, value: str):
@@ -182,22 +177,18 @@ class Person(Serializable):
             raise EmptyValueError("person_id")
         self._person_id = value
 
-
     @property
     def name(self):
         return self._name
-
 
     @name.setter
     def name(self, value: str):
         validate_str(value, "name")
         self._name = value
 
-
     @property
     def email(self) -> str:
         return self._email
-
 
     @email.setter
     def email(self, value: str):
@@ -208,14 +199,12 @@ class Person(Serializable):
 
         self._email = value
 
-
     def serialize(self) -> Dict[str, Any]:
         return {
             "id": self._person_id,
             "name": self._name,
             "email": self._email
         }
-
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'Person':
@@ -241,16 +230,13 @@ class User(Person):
         self._favourite_albums = favourite_albums or []
         self._favourite_artists = favourite_artists or []
 
-
     @property
     def user_id(self) -> str:
         return self.person_id
 
-
     @property
     def subscribed(self) -> bool:
         return self._subscribed
-
 
     @subscribed.setter
     def subscribed(self, value: bool):
@@ -258,11 +244,9 @@ class User(Person):
             raise InvalidTypeError("subscribed", "bool", type(value).__name__)
         self._subscribed = value
 
-
     @property
     def playlists(self) -> List['Playlist']:
         return self._playlists.copy()
-
 
     @playlists.setter
     def playlists(self, value: List['Playlist']):
@@ -270,11 +254,9 @@ class User(Person):
 
         self._playlists = value
 
-
     @property
     def favourite_tracks(self) -> List['Track']:
         return self._favourite_tracks.copy()
-
 
     @favourite_tracks.setter
     def favourite_tracks(self, value: List['Track']):
@@ -282,11 +264,9 @@ class User(Person):
 
         self._favourite_tracks = value
 
-
     @property
     def favourite_albums(self) -> List['Album']:
         return self._favourite_albums.copy()
-
 
     @favourite_albums.setter
     def favourite_albums(self, value: List['Album']):
@@ -303,7 +283,6 @@ class User(Person):
         validate_list(value, "favourite_artists", Artist)
 
         self._favourite_artists = value
-
 
     def serialize(self) -> Dict[str, Any]:
         data = super().serialize()
@@ -391,7 +370,7 @@ class Artist(Person):
     def collabed_albums(self, value: List['Album']):
         validate_list(value, "collabed_albums", Album)
 
-        self.collabed_albums = value
+        self._collabed_albums = value
 
     @property
     def produced_tracks(self) -> List['Track']:
@@ -410,8 +389,8 @@ class Artist(Person):
             "tracks": [track.serialize() for track in self._tracks],
             "albums": [album.serialize() for album in self._albums],
             "collabed_tracks": [track.serialize() for track in self._collabed_tracks],
-            "collabed_albums": [album for album in self._collabed_albums],
-            "produced_tracks": [track for track in self._produced_tracks]
+            "collabed_albums": [album.serialize() for album in self._collabed_albums],
+            "produced_tracks": [track.serialize() for track in self._produced_tracks]
         })
 
         return data
@@ -471,13 +450,11 @@ class Admin(Person):
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'Admin':
-        permissions_data = data.get("permissions", [])
-
         return cls(
             admin_id=data.get("id"),
             name=data.get("name"),
             email=data.get("email"),
-            permissions=[Permission(p) for p in permissions_data],
+            permissions=[Permission(permission) for permission in data.get("permissions", [])],
         )
 
 
@@ -497,16 +474,13 @@ class Collection(Serializable):
 
         self._collaborator_ids = collaborator_ids or []
 
-
     @property
     def collection_id(self) -> str:
         return self._collection_id
 
-
     @property
     def creator_id(self) -> str:
-        return self._collection_id
-
+        return self._creator_id
 
     @property
     def title(self) -> str:
@@ -518,11 +492,9 @@ class Collection(Serializable):
 
         self._title = value
 
-
     @property
     def contents(self) -> List['Content']:
         return self._contents.copy()
-
 
     @contents.setter
     def contents(self, value: List['Content']):
@@ -530,12 +502,10 @@ class Collection(Serializable):
 
         self._contents = value
 
-
     def add_content(self, content: 'Content'):
         self._contents.append(content)
 
         self.update()
-
 
     def remove_content(self, content: 'Content'):
         self._contents.remove(content)
@@ -554,11 +524,9 @@ class Collection(Serializable):
 
             return None
 
-
     @property
     def collaborator_ids(self) -> List[str]:
         return self._collaborator_ids.copy()
-
 
     def refresh_collaborator_ids(self):
         new_collaborator_ids = set()
@@ -570,7 +538,6 @@ class Collection(Serializable):
 
         self._collaborator_ids = list(new_collaborator_ids)
 
-
     def update(self):
         self.refresh_collaborator_ids()
 
@@ -580,7 +547,6 @@ class Collection(Serializable):
     #
     #     self._collaborator_ids = value
 
-
     def serialize(self) -> Dict[str, Any]:
         return {
             "id": self._collection_id,
@@ -589,7 +555,6 @@ class Collection(Serializable):
             "creator_id": self._creator_id,
             "collaborator_ids": self._collaborator_ids.copy(),
         }
-
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'Collection':
@@ -618,31 +583,28 @@ class Album(Collection):
         if not self._genres:
             self.refresh_genres()
 
-
     @property
     def album_id(self) -> str:
         return self.collection_id
-
 
     @property
     def genres(self) -> List[TrackGenre]:
         return self._genres.copy()
 
     def refresh_genres(self):
-        genres = set()
+        new_genres = set()
 
         for track in self.contents:
-            if hasattr(track, "genre"):
-                genres.add(track)
+            if hasattr(track, "genres"):
+                for genre in track.genres:
+                    new_genres.add(genre)
 
-        self._genres = list(genres)
-
+        self._genres = list(new_genres)
 
     def update(self):
         self.refresh_collaborator_ids()
 
         self.refresh_genres()
-
 
     def serialize(self) -> Dict[str, Any]:
         data = super().serialize()
@@ -652,7 +614,6 @@ class Album(Collection):
         })
 
         return data
-
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'Album':
@@ -681,32 +642,28 @@ class Playlist(Collection):
         if not self._genres:
             self.refresh_genres()
 
-
     @property
     def playlist_id(self) -> str:
         return self.collection_id
-
 
     @property
     def genres(self) -> List[TrackGenre]:
         return self._genres.copy()
 
-
     def refresh_genres(self):
-        genres = set()
+        new_genres = set()
 
         for track in self.contents:
-            if hasattr(track, "genre"):
-                genres.add(track)
+            if hasattr(track, "genres"):
+                for genre in track.genres:
+                    new_genres.add(genre)
 
-        self._genres = list(genres)
-
+        self._genres = list(new_genres)
 
     def update(self):
         self.refresh_collaborator_ids()
 
         self.refresh_genres()
-
 
     def serialize(self) -> Dict[str, Any]:
         data = super().serialize()
@@ -716,7 +673,6 @@ class Playlist(Collection):
         })
 
         return data
-
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'Playlist':
@@ -753,14 +709,14 @@ class AudioBook(Collection):
         return self._genres.copy()
 
     def refresh_genres(self):
-        genres = set()
+        new_genres = set()
 
-        for chapter in self.contents:
-            if hasattr(chapter, "genre"):
-                genres.add(chapter)
+        for track in self.contents:
+            if hasattr(track, "genres"):
+                for genre in track.genres:
+                    new_genres.add(genre)
 
-        self._genres = list(genres)
-
+        self._genres = list(new_genres)
 
     def update(self):
         self.refresh_collaborator_ids()
@@ -775,7 +731,6 @@ class AudioBook(Collection):
         })
 
         return data
-
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'AudioBook':
@@ -795,29 +750,26 @@ class Content(Serializable):
     Контент может храниться в коллекциях.
     """
 
-    def __init__(self, content_id: str, title: str, duration: timedelta, artist_id: str,
+    def __init__(self, content_id: str, title: str, duration: timedelta, creator_id: str,
                  collaborator_ids: Optional[List[str]] = None, source_id: Optional[str] = None):
         self._content_id = content_id
         self._title = title
 
         self._duration = duration
 
-        self._artist_id = artist_id
+        self._creator_id = creator_id
 
         self._collaborator_ids = collaborator_ids or []
 
         self._source_id = source_id
 
-
     @property
     def content_id(self) -> str:
         return self._content_id
 
-
     @property
     def title(self) -> str:
         return self._title
-
 
     @title.setter
     def title(self, value: str):
@@ -825,11 +777,9 @@ class Content(Serializable):
 
         self._title = value
 
-
     @property
     def duration(self) -> timedelta:
         return self._duration
-
 
     @duration.setter
     def duration(self, value: timedelta):
@@ -845,11 +795,9 @@ class Content(Serializable):
 
         self._duration = value
 
-
     @property
     def artist_id(self) -> str:
-        return self._artist_id
-
+        return self._creator_id
 
     @property
     def collaborator_ids(self) -> List[str]:
@@ -861,29 +809,25 @@ class Content(Serializable):
 
         self._collaborator_ids = value
 
-
     @property
     def source_id(self) -> str:
         return self._source_id
 
-
     def add_collaborator_id(self, collaborator_id: str):
         if collaborator_id not in self._collaborator_ids:
-            self.collaborator_ids.append(collaborator_id)
-
+            self._collaborator_ids.append(collaborator_id)
 
     def serialize(self) -> Dict[str, Any]:
         data = {
             "id": self._content_id,
             "title": self._title,
             "duration": int(self._duration.total_seconds()),
-            "artist": self._artist_id,
+            "creator_id": self._creator_id,
             "collaborator_ids": self._collaborator_ids.copy(),
-            "source": self._source_id
+            "source_id": self._source_id
         }
 
         return data
-
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'Content':
@@ -891,7 +835,7 @@ class Content(Serializable):
             content_id=data.get("id"),
             title=data.get("title"),
             duration=timedelta(seconds=data.get("duration")),
-            artist_id=data.get("artist_id"),
+            creator_id=data.get("creator_id"),
             collaborator_ids=data.get("collaborator_ids", []),
             source_id=data.get("source_id")
         )
@@ -908,16 +852,13 @@ class Track(Content):
         self._genres = genres
         self._producer_ids = producer_ids or []
 
-
     @property
     def track_id(self) -> str:
         return self.content_id
 
-
     @property
     def genres(self) -> List[TrackGenre]:
         return self._genres.copy()
-
 
     @genres.setter
     def genres(self, value: List[TrackGenre]):
@@ -925,11 +866,9 @@ class Track(Content):
 
         self._genres = value
 
-
     @property
     def producer_ids(self) -> List[str]:
         return self._producer_ids.copy()
-
 
     @producer_ids.setter
     def producer_ids(self, value: List[str]):
@@ -937,16 +876,13 @@ class Track(Content):
 
         self._producer_ids = value
 
-
     def add_genre(self, genre: TrackGenre):
         if genre not in self._genres:
             self._genres.append(genre)
 
-
     def add_producer_id(self, producer_id):
         if producer_id not in self._producer_ids:
             self._producer_ids.append(producer_id)
-
 
     def serialize(self) -> Dict[str, Any]:
         data = super().serialize()
@@ -957,7 +893,6 @@ class Track(Content):
         })
 
         return data
-
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'Track':
@@ -982,16 +917,13 @@ class AudioBookChapter(Content):
 
         self._narrator_ids = narrator_ids or [author_id]
 
-
     @property
     def chapter_id(self) -> str:
         return self.content_id
 
-
     @property
     def narrator_ids(self) -> List[str]:
         return self._narrator_ids.copy()
-
 
     @narrator_ids.setter
     def narrator_ids(self, value: List[str]):
@@ -999,11 +931,9 @@ class AudioBookChapter(Content):
 
         self._narrator_ids = value
 
-
     def add_narrator_id(self, narrator_id: str):
         if narrator_id not in self._narrator_ids:
             self._narrator_ids.append(narrator_id)
-
 
     def serialize(self) -> Dict[str, Any]:
         data = super().serialize()
@@ -1014,14 +944,13 @@ class AudioBookChapter(Content):
 
         return data
 
-
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'AudioBookChapter':
         return cls(
             chapter_id=data.get("id"),
             title=data.get("title"),
             duration=data.get("duration"),
-            author_id=data.get("artist_id"),
+            author_id=data.get("creator_id"),
             collaborator_ids=data.get("collaborator_ids", []),
             narrator_ids=data.get("narrator_ids", []),
             audio_book_id=data.get("source_id")
@@ -1032,178 +961,130 @@ class MusicPlayer:
     """Класс, описывающий музыкальный плеер"""
 
     def __init__(self, music_player_id: str, user: User):
-        self._music_player_id = music_player_id
-        self._user = user
+        # self._music_player_id = music_player_id
+        # self._user = user
+        #
+        # self._current_track: Optional[Track] = None
+        # self._current_playlist: Optional[Playlist] = None
+        #
+        # self._is_playing: bool = False
+        #
+        # self._volume: float = 0.8
+        # self._current_track_position: float = 0.0
+        #
+        # self._shuffle_mode: bool = False
+        # self._repeat_mode: str = "none"
+        # self._playback_speed: float = 1.0
+        # self._equalizer_settings: dict[str, float] = {}
+        #
+        # self._history: list[Track] = []
 
-        self._current_track: Optional[Track] = None
-        self._current_playlist: Optional[Playlist] = None
-
+        self._playlist: List['Track'] = []
+        self._current_index: int = -1
         self._is_playing: bool = False
-
-        self._volume: float = 0.8
-        self._current_track_position: float = 0.0
-
-        self._shuffle_mode: bool = False
-        self._repeat_mode: str = "none"
-        self._playback_speed: float = 1.0
-        self._equalizer_settings: dict[str, float] = {}
-
-        self._history: list[Track] = []
+        self._position: timedelta = timedelta(seconds=0)
+        self._start_time: Optional[float] = None
 
     @property
-    def get_id(self) -> str:
-        return self._music_player_id
+    def current_track(self) -> Optional['Track']:
+        if self._playlist and 0 <= self._current_index < len(self._playlist):
+            return self._playlist[self._current_index]
 
+        return None
 
-def full_serialization_test():
-    artist = Artist(
-        artist_id="artist_001",
-        name="The Rockers",
-        email="rockers@mail.com"
-    )
+    @property
+    def is_playing(self) -> bool:
+        return self._is_playing
 
-    album = Album(
-        album_id="album_001",
-        title="Loud & Proud",
-        tracks=[],  # заполним позже
-        artist_id=artist.artist_id
-    )
+    @property
+    def playlist(self) -> List['Track']:
+        return self._playlist
 
-    track1 = Track(
-        track_id="track_001",
-        title="Thunder Road",
-        genres=[TrackGenre.ROCK],
-        duration=timedelta(minutes=1, seconds=15),
-        artist_id=artist.artist_id
-    )
-    track2 = Track(
-        track_id="track_002",
-        title="Silent Nights",
-        genres=[TrackGenre.CLASSIC],
-        duration=timedelta(minutes=9, seconds=18),
-        artist_id=artist.artist_id,
-        album_id=album.album_id
-    )
+    def status(self) -> str:
+        if not self.current_track:
+            return f"{MUSIC_PLAYER_PREFIX} Сейчас трека нет..."
 
-    tracks = [track1, track2]
+        state = "Играет" if self._is_playing else "Пауза"
+        pos = int(self._position.total_seconds())
+        dur = int(self.current_track.duration.total_seconds())
 
-    album.contents = tracks
-    artist.tracks = tracks
-    artist.album = album
+        return f"{MUSIC_PLAYER_PREFIX} {state}: {self.current_track.title} [{pos}/{dur} сек.]"
 
-    # Аудиокнига и главы
-    chapter1 = AudioBookChapter(
-        chapter_id="ch_001",
-        title="The Beginning",
-        duration=timedelta(minutes=3, seconds=42),
-        author_id=artist.artist_id,
-        audio_book_id="book_001"
-    )
-    chapter2 = AudioBookChapter(
-        chapter_id="ch_002",
-        title="The Fear",
-        duration=timedelta(minutes=5, seconds=45),
-        author_id=artist.artist_id,
-        audio_book_id="book_001"
-    )
+    def load_playlist(self, tracks: List['Track']):
+        self._playlist = tracks
+        self._current_index = 0 if tracks else -1
+        self._is_playing = False
+        self._position = timedelta(seconds=0)
 
-    audio_book = AudioBook(
-        audiobook_id="book_001",
-        title="Story of Sound",
-        chapters=[chapter1, chapter2],
-        author_id=artist.artist_id,
-        genres=[AudioBookGenre.HORROR]
-    )
+        print(f"{MUSIC_PLAYER_PREFIX} Загружено {len(tracks)} треков")
 
-    # Пользователь, который любит этого артиста
-    user = User(
-        user_id="user_001",
-        name="Alice",
-        email="alice@mail.com",
-        subscribed=True,
-        playlists=[],
-        favourite_tracks=[track1, track2],
-        favourite_albums=[album],
-        favourite_artists=[artist]
-    )
+    def play(self):
+        if not self._playlist:
+            print(f"{MUSIC_PLAYER_PREFIX} Плейлист пуст")
 
-    # Плейлист пользователя
-    playlist = Playlist(
-        playlist_id="playlist_001",
-        title="My Favs",
-        tracks=[track1, track2],
-        owner_id=user.user_id
-    )
+            return
 
-    user._playlists = [playlist]
+        if self._is_playing:
+            print(f"{MUSIC_PLAYER_PREFIX} Уже играет")
 
-    # Админ с разрешениями
-    admin = Admin(
-        admin_id="admin_001",
-        name="SuperAdmin",
-        email="admin@mail.com",
-        permissions=[Permission.VIEW_USERS, Permission.BAN_USERS]
-    )
+            return
 
-    # === 2. Сериализация в JSON ===
-    json_handler = JSONFileHandler()
+        track = self._playlist[self._current_index]
 
-    objects_to_save = [user, artist, album, track1, track2, playlist, audio_book, chapter1, chapter2, admin]
+        self._is_playing = True
+        self._start_time = time.time()
 
-    json_filename = "test_data.json"
-    json_handler.save(objects_to_save, json_filename)
+        print(f"{MUSIC_PLAYER_PREFIX} Играет: {track.title} — {track.artist_id}")
 
-    print(f"✅ JSON сохранён: {json_filename}")
+    def pause(self):
+        if not self._is_playing:
+            print(f"{MUSIC_PLAYER_PREFIX} Уже на паузе")
 
-    # Проверим, что файл корректный
-    with open(json_filename, "r", encoding="utf-8") as file:
-        json_data = json.load(file)
-    print(f"Пример JSON:\n{json.dumps(json_data[:2], indent=DEFAULT_INDENT, ensure_ascii=False)}\n")
+            return
 
-    # === 3. Сериализация в XML ===
-    xml_handler = XMLFileHandler()
+        elapsed = time.time() - self._start_time
+        self._position += timedelta(seconds=elapsed)
 
-    xml_filename = "test_data.xml"
-    xml_handler.save(objects_to_save, xml_filename)
+        self._is_playing = False
 
-    print(f"✅ XML сохранён: {xml_filename}")
+        print(f"{MUSIC_PLAYER_PREFIX} Пауза на {self._position.seconds} сек.")
 
-    # Проверим корректность XML
-    xml_tree = ElementTree.parse(xml_filename)
-    xml_root = xml_tree.getroot()
-    print(f"Пример XML-первого элемента:\n{ElementTree.tostring(xml_root[0], encoding='unicode')}\n")
+    def stop(self):
+        if not self._playlist:
+            return
 
-    # === 4. Проверка обратной загрузки ===
-    json_loaded_data = json_handler.load(json_filename)
-    xml_loaded_data = xml_handler.load(xml_filename)
+        self._is_playing = False
 
-    print("✅ JSON-загружено объектов:", len(json_loaded_data))
-    print("✅ XML-загружено объектов:", len(xml_loaded_data))
+        self._position = timedelta(seconds=0)
 
-    # === 5. Сравнение структуры JSON/XML данных ===
-    def normalize(obj):
-        """Удаляет различия в типах данных"""
-        if isinstance(obj, dict):
-            return {k: normalize(v) for k, v in obj.items()}
-        if isinstance(obj, list):
-            return [normalize(v) for v in obj]
-        return str(obj)
+        print(f"{MUSIC_PLAYER_PREFIX} Остановлено")
 
-    json_norm = normalize(json_loaded_data)
-    xml_norm = normalize(xml_loaded_data)
+    def next_track(self):
+        if not self._playlist:
+            print(f"{MUSIC_PLAYER_PREFIX} Плейлист пуст")
 
-    print("🔍 Сравнение JSON и XML:")
-    print("Совпадают по количеству элементов:", len(json_norm) == len(xml_norm))
+            return
 
-    # Пример сверки первых записей
-    print("\nСравнение первой записи:")
-    print("JSON:", json_norm[0])
-    print("XML :", xml_norm[0])
+        self._current_index = (self._current_index + 1) % len(self._playlist)
 
-    result_user = User.deserialize(json_loaded_data[0])
+        self._position = timedelta(seconds=0)
 
-    print(result_user.person_id)
+        print(f"{MUSIC_PLAYER_PREFIX} Следующий трек: {self.current_track.title}")
+
+        if self._is_playing:
+            self.play()
+
+    def previous_track(self):
+        if not self._playlist:
+            print(f"{MUSIC_PLAYER_PREFIX} Плейлист пуст")
+            return
+
+        self._current_index = (self._current_index - 1) % len(self._playlist)
+        self._position = timedelta(seconds=0)
+        print(f"{MUSIC_PLAYER_PREFIX} Предыдущий трек: {self.current_track.title}")
+        if self._is_playing:
+            self.play()
 
 
 if __name__ == "__main__":
-    full_serialization_test()
+    pass

@@ -43,11 +43,6 @@ class Permission(Enum):
     INVITE_ADMINS = "invite_admins"
 
 
-    @classmethod
-    def all(cls) -> list['Permission']:
-        return list(cls)
-
-
 class Serializable(ABC):
     """Абстрактный класс, описывающий сериализуемые объекты"""
 

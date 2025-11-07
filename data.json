@@ -1,0 +1,109 @@
+[
+   {
+      "id": "user_1",
+      "name": "Slade",
+      "email": "slade@gmail.com",
+      "subscribed": true,
+      "playlists": [],
+      "favourite_tracks": [],
+      "favourite_albums": [],
+      "favourite_artists": []
+   },
+   {
+      "id": "artist_1",
+      "name": "Rockman",
+      "email": "rockman@gmail.com",
+      "tracks": [],
+      "albums": [],
+      "collabed_tracks": [],
+      "collabed_albums": [],
+      "produced_tracks": []
+   },
+   {
+      "id": "admin_1",
+      "name": "Admin",
+      "email": "admin@gmail.com",
+      "permissions": [
+         "view_users",
+         "edit_users"
+      ]
+   },
+   {
+      "id": "track_1",
+      "title": "Marusya",
+      "duration": 240,
+      "creator_id": "artist_1",
+      "collaborator_ids": [],
+      "source_id": null,
+      "genres": [
+         "rock"
+      ],
+      "producer_ids": []
+   },
+   {
+      "id": "album_1",
+      "title": "Power Music",
+      "contents": [
+         {
+            "id": "track_1",
+            "title": "Marusya",
+            "duration": 240,
+            "creator_id": "artist_1",
+            "collaborator_ids": [],
+            "source_id": null,
+            "genres": [
+               "rock"
+            ],
+            "producer_ids": []
+         }
+      ],
+      "creator_id": "artist_1",
+      "collaborator_ids": [],
+      "genres": [
+         "rock"
+      ]
+   },
+   {
+      "id": "playlist_1",
+      "title": "Музыка без АП",
+      "contents": [
+         {
+            "id": "track_1",
+            "title": "Marusya",
+            "duration": 240,
+            "creator_id": "artist_1",
+            "collaborator_ids": [],
+            "source_id": null,
+            "genres": [
+               "rock"
+            ],
+            "producer_ids": []
+         }
+      ],
+      "creator_id": "user_1",
+      "collaborator_ids": [],
+      "genres": [
+         "rock"
+      ]
+   },
+   {
+      "id": "book_1",
+      "title": "Релиз в продакшен без ошибок",
+      "contents": [
+         {
+            "id": "chapter_1",
+            "title": "Глава 1",
+            "duration": 300,
+            "creator_id": "artist_2",
+            "collaborator_ids": [],
+            "source_id": "book_1",
+            "narrator_ids": [
+               "artist_2"
+            ]
+         }
+      ],
+      "creator_id": "author_2",
+      "collaborator_ids": [],
+      "genres": []
+   }
+]

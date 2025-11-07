@@ -6,6 +6,7 @@ from datetime import timedelta
 from xml.etree import ElementTree
 import xml.dom.minidom as minidom
 import time
+import random
 
 from config import DEFAULT_FILE_INDENT, MUSIC_PLAYER_PREFIX
 from errors import DataError, EmptyValueError, InvalidTypeError, CustomIndexError
@@ -77,13 +78,6 @@ class FileHandler(ABC):
         pass
 
 
-class FileFormats(Enum):
-    """Перечисляемый класс, описывающий поддерживаемые файловые форматы"""
-
-    JSON = "json"
-    XML = "xml"
-
-
 class JSONFileHandler(FileHandler):
     """Класс, описывающий обработчик файлов .JSON"""
 
@@ -132,22 +126,6 @@ class XMLFileHandler(FileHandler):
             result.append(item_data)
 
         return result
-
-
-class FileHandlerSelector:
-    """Класс, описывающий помощника выбора обработчика файлов"""
-
-    @staticmethod
-    def get_handler(file_format: FileFormats) -> FileHandler:
-        handlers = {
-            FileFormats.JSON: JSONFileHandler(),
-            FileFormats.XML: XMLFileHandler()
-        }
-
-        if file_format not in handlers:
-            raise ValueError(f"Формат не поддерживается: {file_format}")
-
-        return handlers[file_format]
 
 
 class Person(Serializable):
@@ -561,7 +539,7 @@ class Collection(Serializable):
         return cls(
             collection_id=data.get("id"),
             title=data.get("title"),
-            contents=data.get("contents", []),
+            contents=[Content.deserialize(content) for content in data.get("contents", [])],
             creator_id=data.get("creator_id"),
             collaborator_ids=data.get("collaborator_ids", [])
         )
@@ -834,7 +812,7 @@ class Content(Serializable):
         return cls(
             content_id=data.get("id"),
             title=data.get("title"),
-            duration=timedelta(seconds=data.get("duration")),
+            duration=timedelta(seconds=data.get("duration", 0)),
             creator_id=data.get("creator_id"),
             collaborator_ids=data.get("collaborator_ids", []),
             source_id=data.get("source_id")
@@ -900,7 +878,7 @@ class Track(Content):
             track_id=data.get("id"),
             title=data.get("title"),
             genres=[TrackGenre(genre) for genre in data.get("genres", [])],
-            duration=data.get("duration"),
+            duration=timedelta(seconds=data.get("duration", 0)),
             artist_id=data.get("creator_id"),
             collaborator_ids=data.get("collaborator_ids", []),
             producer_ids=data.get("producer_ids", []),
@@ -949,7 +927,7 @@ class AudioBookChapter(Content):
         return cls(
             chapter_id=data.get("id"),
             title=data.get("title"),
-            duration=data.get("duration"),
+            duration=timedelta(seconds=data.get("duration", 0)),
             author_id=data.get("creator_id"),
             collaborator_ids=data.get("collaborator_ids", []),
             narrator_ids=data.get("narrator_ids", []),
@@ -957,134 +935,315 @@ class AudioBookChapter(Content):
         )
 
 
+class RepeatModeValues(Enum):
+    NONE = "none"
+    ONE = "one"
+    ALL = "all"
+
+
 class MusicPlayer:
     """Класс, описывающий музыкальный плеер"""
 
-    def __init__(self, music_player_id: str, user: User):
-        # self._music_player_id = music_player_id
-        # self._user = user
-        #
-        # self._current_track: Optional[Track] = None
-        # self._current_playlist: Optional[Playlist] = None
-        #
-        # self._is_playing: bool = False
-        #
-        # self._volume: float = 0.8
-        # self._current_track_position: float = 0.0
-        #
-        # self._shuffle_mode: bool = False
-        # self._repeat_mode: str = "none"
-        # self._playback_speed: float = 1.0
-        # self._equalizer_settings: dict[str, float] = {}
-        #
-        # self._history: list[Track] = []
+    def __init__(self, music_player_id: str, user: 'User'):
+        self._music_player_id = music_player_id
+        self._user = user
 
-        self._playlist: List['Track'] = []
-        self._current_index: int = -1
+        self._current_track: Optional['Track'] = None
+        self._current_playlist: Optional['Playlist'] = None
+
         self._is_playing: bool = False
-        self._position: timedelta = timedelta(seconds=0)
+        self._volume: float = 0.8
+        self._current_track_position: timedelta = timedelta(seconds=0)
+
+        self._shuffle_mode: bool = False
+        self._repeat_mode: RepeatModeValues = RepeatModeValues.NONE
+        self._playback_speed: float = 1.0
+
+        self._history: list['Track'] = []
+
         self._start_time: Optional[float] = None
-
-    @property
-    def current_track(self) -> Optional['Track']:
-        if self._playlist and 0 <= self._current_index < len(self._playlist):
-            return self._playlist[self._current_index]
-
-        return None
 
     @property
     def is_playing(self) -> bool:
         return self._is_playing
 
     @property
-    def playlist(self) -> List['Track']:
-        return self._playlist
+    def current_track(self) -> Optional['Track']:
+        return self._current_track
+
+    @property
+    def current_playlist(self) -> Optional['Playlist']:
+        return self._current_playlist
 
     def status(self) -> str:
-        if not self.current_track:
-            return f"{MUSIC_PLAYER_PREFIX} Сейчас трека нет..."
+        if not self._current_track:
+            return f"{MUSIC_PLAYER_PREFIX} Сейчас трек не выбран."
 
         state = "Играет" if self._is_playing else "Пауза"
-        pos = int(self._position.total_seconds())
-        dur = int(self.current_track.duration.total_seconds())
 
-        return f"{MUSIC_PLAYER_PREFIX} {state}: {self.current_track.title} [{pos}/{dur} сек.]"
+        pos = int(self._current_track_position.total_seconds())
+        dur = int(self._current_track.duration.total_seconds())
+        vol = int(self._volume * 100)
 
-    def load_playlist(self, tracks: List['Track']):
-        self._playlist = tracks
-        self._current_index = 0 if tracks else -1
+        return f"{MUSIC_PLAYER_PREFIX} {state}: {self._current_track.title} [{pos}/{dur} сек.] Громкость: {vol}%"
+
+    def load_playlist(self, playlist: 'Playlist'):
+        self._current_playlist = playlist
+        self._current_track = playlist.contents[0] if playlist.contents else None
+
         self._is_playing = False
-        self._position = timedelta(seconds=0)
 
-        print(f"{MUSIC_PLAYER_PREFIX} Загружено {len(tracks)} треков")
+        self._current_track_position = timedelta(seconds=0)
 
-    def play(self):
-        if not self._playlist:
-            print(f"{MUSIC_PLAYER_PREFIX} Плейлист пуст")
+        self._history.clear()
+
+        print(f"{MUSIC_PLAYER_PREFIX} Загружен плейлист '{playlist.title}'")
+
+    def play(self, track: Optional['Track'] = None):
+        if track:
+            self._current_track = track
+
+        if not self._current_track:
+            print(f"{MUSIC_PLAYER_PREFIX} Нет трека для воспроизведения.")
 
             return
-
-        if self._is_playing:
-            print(f"{MUSIC_PLAYER_PREFIX} Уже играет")
-
-            return
-
-        track = self._playlist[self._current_index]
 
         self._is_playing = True
+
         self._start_time = time.time()
 
-        print(f"{MUSIC_PLAYER_PREFIX} Играет: {track.title} — {track.artist_id}")
+        print(f"{MUSIC_PLAYER_PREFIX} Играет: {self._current_track.title}")
 
     def pause(self):
         if not self._is_playing:
-            print(f"{MUSIC_PLAYER_PREFIX} Уже на паузе")
+            print(f"{MUSIC_PLAYER_PREFIX} Уже на паузе.")
 
             return
 
-        elapsed = time.time() - self._start_time
-        self._position += timedelta(seconds=elapsed)
+        elapsed = (time.time() - self._start_time) * self._playback_speed
+
+        self._current_track_position += timedelta(seconds=elapsed)
 
         self._is_playing = False
 
-        print(f"{MUSIC_PLAYER_PREFIX} Пауза на {self._position.seconds} сек.")
+        pos = int(self._current_track_position.total_seconds())
+
+        print(f"{MUSIC_PLAYER_PREFIX} Пауза на {pos} сек.")
 
     def stop(self):
-        if not self._playlist:
+        if not self._current_track:
             return
 
         self._is_playing = False
 
-        self._position = timedelta(seconds=0)
+        self._current_track_position = timedelta(seconds=0)
 
-        print(f"{MUSIC_PLAYER_PREFIX} Остановлено")
+        print(f"{MUSIC_PLAYER_PREFIX} Остановлено.")
 
     def next_track(self):
-        if not self._playlist:
-            print(f"{MUSIC_PLAYER_PREFIX} Плейлист пуст")
+        if not self._current_playlist or not self._current_playlist.contents:
+            print(f"{MUSIC_PLAYER_PREFIX} Плейлист пуст.")
 
             return
 
-        self._current_index = (self._current_index + 1) % len(self._playlist)
+        playlist = self._current_playlist.contents
 
-        self._position = timedelta(seconds=0)
+        if not self._current_track or self._current_track not in playlist:
+            self._current_track = playlist[0]
 
-        print(f"{MUSIC_PLAYER_PREFIX} Следующий трек: {self.current_track.title}")
+            current_index = 0
+        else:
+            current_index = playlist.index(self._current_track)
 
-        if self._is_playing:
-            self.play()
+        if self._shuffle_mode:
+            next_track = random.choice(playlist)
+        else:
+            next_index = (current_index + 1) % len(playlist)
+            next_track = playlist[next_index]
+
+        if self._repeat_mode == RepeatModeValues.ONE:
+            next_track = self._current_track
+
+        if self._repeat_mode == RepeatModeValues.NONE and current_index == len(playlist) - 1:
+            self.stop()
+
+            print(f"{MUSIC_PLAYER_PREFIX} Плейлист закончился.")
+
+            return
+
+        self._history.append(self._current_track)
+
+        self.play(next_track)
 
     def previous_track(self):
-        if not self._playlist:
-            print(f"{MUSIC_PLAYER_PREFIX} Плейлист пуст")
+        if not self._history:
+            print(f"{MUSIC_PLAYER_PREFIX} История пуста.")
+
             return
 
-        self._current_index = (self._current_index - 1) % len(self._playlist)
-        self._position = timedelta(seconds=0)
-        print(f"{MUSIC_PLAYER_PREFIX} Предыдущий трек: {self.current_track.title}")
-        if self._is_playing:
-            self.play()
+        prev_track = self._history.pop()
+        self.play(prev_track)
+
+    def set_volume(self, value: float):
+        self._volume = max(0.0, min(1.0, value))
+
+        vol = int(self._volume * 100)
+
+        print(f"{MUSIC_PLAYER_PREFIX} Громкость: {vol}%")
+
+    def toggle_shuffle_mod(self):
+        self._shuffle_mode = not self._shuffle_mode
+
+        mode = "включен" if self._shuffle_mode else "выключен"
+
+        print(f"{MUSIC_PLAYER_PREFIX} Shuffle мод {mode}")
+
+    def set_repeat_mode(self, mode: RepeatModeValues):
+        self._repeat_mode = mode
+
+        print(f"{MUSIC_PLAYER_PREFIX} Режим повтора: {mode}")
+
+    def set_playback_speed(self, speed: float):
+        if speed <= 0:
+            print(f"{MUSIC_PLAYER_PREFIX} Ошибка: скорость должна быть > 0")
+
+            return
+
+        self._playback_speed = speed
+
+        print(f"{MUSIC_PLAYER_PREFIX} Скорость воспроизведения: x{speed}")
 
 
 if __name__ == "__main__":
-    pass
+    user = User(
+        user_id="user_1",
+        name="Slade",
+        email="slade@gmail.com",
+        subscribed=True
+    )
+
+    assert isinstance(user, Person)
+    print("User наследует Person")
+
+    artist = Artist(
+        artist_id="artist_1",
+        name="Rockman",
+        email="rockman@gmail.com"
+    )
+
+    assert isinstance(artist, Person)
+    print("Artist наследует Person")
+
+    admin = Admin(
+        admin_id="admin_1",
+        name="Admin",
+        email="admin@gmail.com",
+        permissions=[Permission.VIEW_USERS, Permission.EDIT_USERS]
+    )
+
+    assert isinstance(admin, Person)
+    print("Admin наследует Person")
+
+    track = Track(
+        track_id="track_1",
+        title="Marusya",
+        genres=[TrackGenre.ROCK],
+        duration=timedelta(seconds=240),
+        artist_id=artist.artist_id
+    )
+
+    assert isinstance(track, Content)
+    print("Track наследует Content")
+
+    chapter = AudioBookChapter(
+        chapter_id="chapter_1",
+        title="Глава 1",
+        duration=timedelta(minutes=5),
+        author_id="artist_2",
+        audio_book_id="book_1"
+    )
+
+    assert isinstance(chapter, Content)
+    print("AudioBookChapter наследует Content")
+
+    album = Album(
+        album_id="album_1",
+        title="Power Music",
+        tracks=[track],
+        artist_id=artist.artist_id
+    )
+
+    assert isinstance(album, Collection)
+    print("Album наследует Collection")
+
+    playlist = Playlist(
+        playlist_id="playlist_1",
+        title="Музыка без АП",
+        tracks=[track],
+        owner_id=user.user_id
+    )
+
+    assert isinstance(playlist, Collection)
+    print("Playlist наследует Collection")
+
+    audiobook = AudioBook(
+        audiobook_id="book_1",
+        title="Релиз в продакшен без ошибок",
+        chapters=[chapter],
+        author_id="author_2"
+    )
+
+    assert isinstance(audiobook, Collection)
+    print("AudioBook наследует Collection")
+
+    player = MusicPlayer("music_player_1", user)
+    player.load_playlist(playlist)
+    player.play()
+    player.pause()
+    player.next_track()
+    player.set_volume(0.5)
+    player.set_repeat_mode(RepeatModeValues.ALL)
+    player.set_playback_speed(1.25)
+
+    print("MusicPlayer работает")
+
+    objects = [user, artist, admin, track, album, playlist, audiobook]
+
+    json_handler = JSONFileHandler()
+    xml_handler = XMLFileHandler()
+
+    # JSON
+    json_file = "data.json"
+    json_handler.save(objects, json_file)
+
+    print(f"JSON успешно сохранён в файл {json_file}")
+
+    loaded_json = json_handler.load(json_file)
+
+    assert isinstance(loaded_json, list)
+    print("JSON успешно загружен")
+
+    # XML
+    xml_file = "data.xml"
+    xml_handler.save(objects, xml_file)
+
+    print(f"XML успешно сохранён в файл {xml_file}")
+
+    loaded_xml = xml_handler.load(xml_file)
+
+    assert isinstance(loaded_xml, list)
+    print("XML успешно загружен")
+
+    _ = Person.deserialize(user.serialize())
+    _ = User.deserialize(user.serialize())
+    _ = Artist.deserialize(artist.serialize())
+    _ = Admin.deserialize(admin.serialize())
+    _ = Track.deserialize(track.serialize())
+    _ = Album.deserialize(album.serialize())
+    _ = Playlist.deserialize(playlist.serialize())
+    _ = AudioBook.deserialize(audiobook.serialize())
+    _ = AudioBookChapter.deserialize(chapter.serialize())
+
+    print("✅ Все классы успешно сериализуются и десериализуются")
+
+    print("Проверка работоспособности завершена!")

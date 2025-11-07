@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import json
 from enum import Enum
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from datetime import timedelta
 from xml.etree import ElementTree
 import xml.dom.minidom as minidom
@@ -128,7 +128,7 @@ class XMLFileHandler(FileHandler):
         return result
 
 
-class Person(Serializable):
+class Person(Serializable, ABC):
     """Базовый класс, описывающий человека в системе"""
 
     def __init__(self, person_id: str, name: str, email: str):
@@ -150,7 +150,7 @@ class Person(Serializable):
     @person_id.setter
     def person_id(self, value: str):
         if not isinstance(value, str):
-            raise InvalidTypeError("person_id", "str", type(value).__name__)
+            raise InvalidTypeError("person_id", str, type(value))
         if not value.strip():
             raise EmptyValueError("person_id")
         self._person_id = value
@@ -198,7 +198,8 @@ class User(Person):
 
     def __init__(self, user_id: str, name: str, email: str, subscribed: bool,
                  playlists: Optional[List['Playlist']] = None, favourite_tracks: Optional[List['Track']] = None,
-                 favourite_albums: Optional[List['Album']] = None, favourite_artists: Optional[List['Artist']] = None):
+                 favourite_albums: Optional[List['Album']] = None, favourite_artists: Optional[List['Artist']] = None,
+                 favourite_audiobooks: Optional[List['AudioBook']] = None):
         super().__init__(user_id, name, email)
 
         self._subscribed = subscribed
@@ -207,6 +208,8 @@ class User(Person):
         self._favourite_tracks = favourite_tracks or []
         self._favourite_albums = favourite_albums or []
         self._favourite_artists = favourite_artists or []
+
+        self._favourite_audiobooks = favourite_audiobooks or []
 
     @property
     def user_id(self) -> str:
@@ -219,7 +222,7 @@ class User(Person):
     @subscribed.setter
     def subscribed(self, value: bool):
         if not isinstance(value, bool):
-            raise InvalidTypeError("subscribed", "bool", type(value).__name__)
+            raise InvalidTypeError("subscribed", bool, type(value))
         self._subscribed = value
 
     @property
@@ -262,15 +265,166 @@ class User(Person):
 
         self._favourite_artists = value
 
+    @property
+    def favourite_audiobooks(self) -> List['AudioBook']:
+        return self._favourite_audiobooks.copy()
+
+    @favourite_audiobooks.setter
+    def favourite_audiobooks(self, value: List['AudioBook']):
+        validate_list(value, "favourite_audiobooks", AudioBook)
+
+        self._favourite_audiobooks = value
+
+    def add_playlist(self, playlist: 'Playlist'):
+        if not isinstance(playlist, Playlist):
+            raise InvalidTypeError("playlist", Playlist, type(playlist))
+
+        if playlist not in self._playlists:
+            self._playlists.append(playlist)
+
+    def remove_playlist(self, playlist: 'Playlist'):
+        if not isinstance(playlist, Playlist):
+            raise InvalidTypeError("playlist", Playlist, type(playlist))
+
+        if playlist in self._playlists:
+            self._playlists.remove(playlist)
+        else:
+            print(f"Плейлист {getattr(playlist, "title", "None")} не найден.")
+
+    def pop_playlist(self, index: int = 0) -> Optional['Playlist']:
+        if not self._playlists:
+            print("Список плейлистов пуст.")
+
+            return None
+        try:
+            return self._playlists.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
+
+    def add_favourite_track(self, favourite_track: 'Track'):
+        if not isinstance(favourite_track, Track):
+            raise InvalidTypeError("favourite_track", Track, type(favourite_track))
+
+        if favourite_track not in self._favourite_tracks:
+            self._favourite_tracks.append(favourite_track)
+
+    def remove_favourite_track(self, favourite_track: 'Track'):
+        if not isinstance(favourite_track, Track):
+            raise InvalidTypeError("favourite_track", Track, type(favourite_track))
+
+        if favourite_track in self._favourite_tracks:
+            self._favourite_tracks.remove(favourite_track)
+        else:
+            print(f"Трек {getattr(favourite_track, "title", "None")} не найден.")
+
+    def pop_favourite_track(self, index: int = 0) -> Optional['Track']:
+        if not self._favourite_tracks:
+            print("Список любимых треков пуст.")
+
+            return None
+        try:
+            return self._favourite_tracks.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
+
+    def add_favourite_album(self, favourite_album: 'Album'):
+        if not isinstance(favourite_album, Album):
+            raise InvalidTypeError("favourite_album", Album, type(favourite_album))
+
+        if favourite_album not in self._favourite_albums:
+            self._favourite_albums.append(favourite_album)
+
+    def remove_favourite_album(self, favourite_album: 'Album'):
+        if not isinstance(favourite_album, Album):
+            raise InvalidTypeError("favourite_album", Album, type(favourite_album))
+
+        if favourite_album in self._favourite_albums:
+            self._favourite_albums.remove(favourite_album)
+        else:
+            print(f"Альбом {getattr(favourite_album, "title", "None")} не найден.")
+
+    def pop_favourite_album(self, index: int = 0) -> Optional['Album']:
+        if not self._favourite_albums:
+            print("Список любимых альбомов пуст.")
+
+            return None
+        try:
+            return self._favourite_albums.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
+
+    def add_favourite_artist(self, favourite_artist: 'Artist'):
+        if not isinstance(favourite_artist, Artist):
+            raise InvalidTypeError("favourite_artist", Artist, type(favourite_artist))
+
+        if favourite_artist not in self._favourite_artists:
+            self._favourite_artists.append(favourite_artist)
+
+    def remove_favourite_artist(self, favourite_artist: 'Artist'):
+        if not isinstance(favourite_artist, Artist):
+            raise InvalidTypeError("favourite_artist", Artist, type(favourite_artist))
+
+        if favourite_artist in self._favourite_artists:
+            self._favourite_artists.remove(favourite_artist)
+        else:
+            print(f"Артист {getattr(favourite_artist, "title", "None")} не найден.")
+
+    def pop_favourite_artist(self, index: int = 0) -> Optional['Artist']:
+        if not self._favourite_artists:
+            print("Список любимых артистов пуст.")
+
+            return None
+        try:
+            return self._favourite_artists.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
+
+    def add_favourite_audiobook(self, favourite_audiobook: 'AudioBook'):
+        if not isinstance(favourite_audiobook, AudioBook):
+            raise InvalidTypeError("favourite_audiobook", AudioBook, type(favourite_audiobook))
+
+        if favourite_audiobook not in self._favourite_audiobooks:
+            self._favourite_audiobooks.append(favourite_audiobook)
+
+    def remove_favourite_audiobook(self, favourite_audiobook: 'AudioBook'):
+        if not isinstance(favourite_audiobook, AudioBook):
+            raise InvalidTypeError("favourite_audiobook", AudioBook, type(favourite_audiobook))
+
+        if favourite_audiobook in self._favourite_audiobooks:
+            self._favourite_audiobooks.remove(favourite_audiobook)
+        else:
+            print(f"Аудиокнига {getattr(favourite_audiobook, "title", "None")} не найдена.")
+
+    def pop_favourite_audiobook(self, index: int = 0) -> Optional['AudioBook']:
+        if not self._favourite_artists:
+            print("Список любимых аудиокниг пуст.")
+
+            return None
+        try:
+            return self._favourite_audiobooks.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
+
     def serialize(self) -> Dict[str, Any]:
         data = super().serialize()
 
         data.update({
             "subscribed": self._subscribed,
-            "playlists": [p.serialize() for p in self._playlists],
-            "favourite_tracks": [t.serialize() for t in self._favourite_tracks],
-            "favourite_albums": [a.serialize() for a in self._favourite_albums],
-            "favourite_artists": [a.serialize() for a in self._favourite_artists]
+            "playlists": [playlist.serialize() for playlist in self._playlists],
+            "favourite_tracks": [track.serialize() for track in self._favourite_tracks],
+            "favourite_albums": [album.serialize() for album in self._favourite_albums],
+            "favourite_artists": [artist.serialize() for artist in self._favourite_artists],
+            "favourite_audiobooks": [audiobook.serialize() for audiobook in self._favourite_audiobooks]
         })
 
         return data
@@ -282,10 +436,11 @@ class User(Person):
             name=data.get("name"),
             email=data.get("email"),
             subscribed=data.get("subscribed"),
-            playlists=[Playlist.deserialize(playlist) for playlist in data.get("playlists")],
-            favourite_tracks=[Track.deserialize(track) for track in data.get("favourite_tracks")],
-            favourite_albums=[Album.deserialize(album) for album in data.get("favourite_albums")],
-            favourite_artists=[Artist.deserialize(artist) for artist in data.get("favourite_artists")]
+            playlists=[Playlist.deserialize(playlist) for playlist in data.get("playlists", [])],
+            favourite_tracks=[Track.deserialize(track) for track in data.get("favourite_tracks", [])],
+            favourite_albums=[Album.deserialize(album) for album in data.get("favourite_albums", [])],
+            favourite_artists=[Artist.deserialize(artist) for artist in data.get("favourite_artists", [])],
+            favourite_audiobooks=[AudioBook.deserialize(audiobook) for audiobook in data.get("favourite_audiobooks", [])]
         )
 
 
@@ -293,9 +448,9 @@ class Artist(Person):
     """Класс, описывающий музыканта"""
 
     def __init__(self, artist_id: str, name: str, email: str,
-                 tracks: Optional[List['Track']] = None, albums: Optional[List['Album']] = None,
-                 collabed_tracks: Optional[List['Track']] = None, collabed_albums:Optional[List['Album']] = None,
-                 produced_tracks: Optional[List['Track']] = None):
+                 tracks: Optional[List[Union['Track', 'AudioBookChapter']]] = None, albums: Optional[List[Union['Album', 'AudioBook']]] = None,
+                 collabed_tracks: Optional[List[Union['Track', 'AudioBookChapter']]] = None, collabed_albums:Optional[List[Union['Album', 'AudioBook']]] = None,
+                 produced_tracks: Optional[List[Union['Track', 'AudioBookChapter']]] = None):
         super().__init__(artist_id, name, email)
 
         self._tracks = tracks or []
@@ -311,54 +466,194 @@ class Artist(Person):
         return self.person_id
 
     @property
-    def tracks(self) -> List['Track']:
+    def tracks(self) -> List[Union['Track', 'AudioBookChapter']]:
         return self._tracks.copy()
 
     @tracks.setter
-    def tracks(self, value: List['Track']):
-        validate_list(value, "tracks", Track)
+    def tracks(self, value: List[Union['Track', 'AudioBookChapter']]):
+        validate_list(value, "tracks", Union[Track, AudioBookChapter])
 
         self._tracks = value
 
     @property
-    def albums(self) -> List['Album']:
+    def albums(self) -> List[Union['Album', 'AudioBook']]:
         return self._albums.copy()
 
     @albums.setter
-    def albums(self, value: List['Album']):
-        validate_list(value, "albums", Album)
+    def albums(self, value: List[Union['Album', 'AudioBook']]):
+        validate_list(value, "albums", Union[Album, AudioBook])
 
         self._albums = value
 
     @property
-    def collabed_tracks(self) -> List['Track']:
+    def collabed_tracks(self) -> List[Union['Track', 'AudioBookChapter']]:
         return self._collabed_tracks.copy()
 
     @collabed_tracks.setter
-    def collabed_tracks(self, value: List['Track']):
-        validate_list(value, "collabed_tracks", Track)
+    def collabed_tracks(self, value: List[Union['Track', 'AudioBookChapter']]):
+        validate_list(value, "collabed_tracks", Union[Track, AudioBookChapter])
 
         self._collabed_tracks = value
 
     @property
-    def collabed_albums(self) -> List['Album']:
+    def collabed_albums(self) -> List[Union['Album', 'AudioBook']]:
         return self._collabed_albums.copy()
 
     @collabed_albums.setter
-    def collabed_albums(self, value: List['Album']):
-        validate_list(value, "collabed_albums", Album)
+    def collabed_albums(self, value: List[Union['Album', 'AudioBook']]):
+        validate_list(value, "collabed_albums", Union[Album, AudioBook])
 
         self._collabed_albums = value
 
     @property
-    def produced_tracks(self) -> List['Track']:
+    def produced_tracks(self) -> List[Union['Track', 'AudioBookChapter']]:
         return self._produced_tracks.copy()
 
     @produced_tracks.setter
-    def produced_tracks(self, value: List['Track']):
-        validate_list(value, "produced_tracks", Track)
+    def produced_tracks(self, value: List[Union['Track', 'AudioBookChapter']]):
+        validate_list(value, "produced_tracks", Union[Track, AudioBookChapter])
 
         self._produced_tracks = value
+
+    def add_track(self, track: Union['Track','AudioBookChapter']):
+        if not isinstance(track, Union[Track, AudioBookChapter]):
+            raise InvalidTypeError("track", Union[Track, AudioBookChapter], type(track))
+
+        if track not in self._tracks:
+            self._tracks.append(track)
+
+    def remove_track(self, track: Union['Track', 'AudioBookChapter']):
+        if not isinstance(track, Union[Track, AudioBookChapter]):
+            raise InvalidTypeError("track", Union[Track, AudioBookChapter], type(track))
+
+        if track in self._tracks:
+            self._tracks.remove(track)
+        else:
+            print(f"Трек {getattr(track, "title", "None")} не найден.")
+
+    def pop_track(self, index: int = 0) -> Optional[Union['Track', 'AudioBookChapter']]:
+        if not self._tracks:
+            print("Список треков пуст.")
+
+            return None
+        try:
+            return self._tracks.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
+
+    def add_album(self, album: Union['Album', 'AudioBook']):
+        if not isinstance(album, Union[Album, AudioBook]):
+            raise InvalidTypeError("album", Union[Album, AudioBook], type(album))
+
+        if album not in self._albums:
+            self._albums.append(album)
+
+    def remove_album(self, album: Union['Album', 'AudioBook']):
+        if not isinstance(album, Union[Album, AudioBook]):
+            raise InvalidTypeError("album", Union[Album, AudioBook], type(album))
+
+        if album in self._albums:
+            self._albums.remove(album)
+        else:
+            print(f"Альбом {getattr(album, "title", "None")} не найден.")
+
+    def pop_album(self, index: int = 0) -> Optional[Union['Album', 'AudioBook']]:
+        if not self._albums:
+            print("Список альбомов пуст.")
+
+            return None
+        try:
+            return self._albums.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
+
+    def add_collabed_track(self, collabed_track: Union['Track','AudioBookChapter']):
+        if not isinstance(collabed_track, Union[Track, AudioBookChapter]):
+            raise InvalidTypeError("collabed_track", Union[Track, AudioBookChapter], type(track))
+
+        if collabed_track not in self._collabed_tracks:
+            self._collabed_tracks.append(collabed_track)
+
+    def remove_collabed_track(self, collabed_track: Union['Track', 'AudioBookChapter']):
+        if not isinstance(collabed_track, Union[Track, AudioBookChapter]):
+            raise InvalidTypeError("collabed_track", Union[Track, AudioBookChapter], type(collabed_track))
+
+        if collabed_track in self._collabed_tracks:
+            self._collabed_tracks.remove(collabed_track)
+        else:
+            print(f"Совместный трек {getattr(collabed_track, "title", "None")} не найден.")
+
+    def pop_collabed_track(self, index: int = 0) -> Optional[Union['Track', 'AudioBookChapter']]:
+        if not self._collabed_tracks:
+            print("Список совместных треков пуст.")
+
+            return None
+        try:
+            return self._collabed_tracks.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
+
+    def add_collabed_album(self, collabed_album: Union['Album', 'AudioBook']):
+        if not isinstance(collabed_album, Union[Album, AudioBook]):
+            raise InvalidTypeError("collabed_album", Union[Album, AudioBook], type(collabed_album))
+
+        if collabed_album not in self._collabed_albums:
+            self._collabed_albums.append(collabed_album)
+
+    def remove_collabed_album(self, collabed_album: Union['Album', 'AudioBook']):
+        if not isinstance(collabed_album, Union[Album, AudioBook]):
+            raise InvalidTypeError("collabed_album", Union[Album, AudioBook], type(collabed_album))
+
+        if collabed_album in self._collabed_albums:
+            self._collabed_albums.remove(collabed_album)
+        else:
+            print(f"Совместный альбом {getattr(collabed_album, "title", "None")} не найден.")
+
+    def pop_collabed_album(self, index: int = 0) -> Optional[Union['Album', 'AudioBook']]:
+        if not self._collabed_albums:
+            print("Список совместных альбомов пуст.")
+
+            return None
+        try:
+            return self._collabed_albums.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
+
+    def add_produced_track(self, produced_track: Union['Track', 'AudioBookChapter']):
+        if not isinstance(album, Union[Track, AudioBookChapter]):
+            raise InvalidTypeError("produced_track", Union[Track, AudioBookChapter], type(produced_track))
+
+        if produced_track not in self._produced_tracks:
+            self._produced_tracks.append(produced_track)
+
+    def remove_produced_track(self, produced_track: Union['Track', 'AudioBookChapter']):
+        if not isinstance(produced_track, Union[Track, AudioBookChapter]):
+            raise InvalidTypeError("produced_track", Union[Track, AudioBookChapter], type(produced_track))
+
+        if produced_track in self._produced_tracks:
+            self._produced_tracks.remove(produced_track)
+        else:
+            print(f"Спродюсированный трек {getattr(produced_track, "title", "None")} не найден.")
+
+    def pop_produced_track(self, index: int = 0) -> Optional[Union['Track', 'AudioBookChapter']]:
+        if not self._produced_tracks:
+            print("Список спродюсированных треков пуст.")
+
+            return None
+        try:
+            return self._produced_tracks.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
 
     def serialize(self) -> Dict[str, Any]:
         data = super().serialize()
@@ -436,7 +731,7 @@ class Admin(Person):
         )
 
 
-class Collection(Serializable):
+class Collection(Serializable, ABC):
     """
     Класс, описывающий коллекцию
 
@@ -1115,6 +1410,8 @@ class MusicPlayer:
 
 
 if __name__ == "__main__":
+    filename = "data"
+
     user = User(
         user_id="user_1",
         name="Slade",
@@ -1130,6 +1427,8 @@ if __name__ == "__main__":
         name="Rockman",
         email="rockman@gmail.com"
     )
+
+    user.add_favourite_artist(artist)
 
     assert isinstance(artist, Person)
     print("Artist наследует Person")
@@ -1155,6 +1454,8 @@ if __name__ == "__main__":
     assert isinstance(track, Content)
     print("Track наследует Content")
 
+    user.add_favourite_track(track)
+
     chapter = AudioBookChapter(
         chapter_id="chapter_1",
         title="Глава 1",
@@ -1176,6 +1477,8 @@ if __name__ == "__main__":
     assert isinstance(album, Collection)
     print("Album наследует Collection")
 
+    user.add_favourite_album(album)
+
     playlist = Playlist(
         playlist_id="playlist_1",
         title="Музыка без АП",
@@ -1186,6 +1489,8 @@ if __name__ == "__main__":
     assert isinstance(playlist, Collection)
     print("Playlist наследует Collection")
 
+    user.add_playlist(playlist)
+
     audiobook = AudioBook(
         audiobook_id="book_1",
         title="Релиз в продакшен без ошибок",
@@ -1195,6 +1500,10 @@ if __name__ == "__main__":
 
     assert isinstance(audiobook, Collection)
     print("AudioBook наследует Collection")
+
+    audiobook.add_content(chapter)
+
+    user.add_favourite_audiobook(audiobook)
 
     player = MusicPlayer("music_player_1", user)
     player.load_playlist(playlist)
@@ -1213,7 +1522,7 @@ if __name__ == "__main__":
     xml_handler = XMLFileHandler()
 
     # JSON
-    json_file = "data.json"
+    json_file = f"{filename}.json"
     json_handler.save(objects, json_file)
 
     print(f"JSON успешно сохранён в файл {json_file}")
@@ -1224,7 +1533,7 @@ if __name__ == "__main__":
     print("JSON успешно загружен")
 
     # XML
-    xml_file = "data.xml"
+    xml_file = f"{filename}.xml"
     xml_handler.save(objects, xml_file)
 
     print(f"XML успешно сохранён в файл {xml_file}")
@@ -1244,6 +1553,6 @@ if __name__ == "__main__":
     _ = AudioBook.deserialize(audiobook.serialize())
     _ = AudioBookChapter.deserialize(chapter.serialize())
 
-    print("✅ Все классы успешно сериализуются и десериализуются")
+    print("Все классы успешно сериализуются и десериализуются")
 
     print("Проверка работоспособности завершена!")

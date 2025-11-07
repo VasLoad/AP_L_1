@@ -5,10 +5,11 @@
       <name>Slade</name>
       <email>slade@gmail.com</email>
       <subscribed>True</subscribed>
-      <playlists/>
-      <favourite_tracks/>
-      <favourite_albums/>
-      <favourite_artists/>
+      <playlists>{'id': 'playlist_1', 'title': 'Музыка без АП', 'contents': [{'id': 'track_1', 'title': 'Marusya', 'duration': 240, 'creator_id': 'artist_1', 'collaborator_ids': [], 'source_id': None, 'genres': ['rock'], 'producer_ids': []}], 'creator_id': 'user_1', 'collaborator_ids': [], 'genres': ['rock']}</playlists>
+      <favourite_tracks>{'id': 'track_1', 'title': 'Marusya', 'duration': 240, 'creator_id': 'artist_1', 'collaborator_ids': [], 'source_id': None, 'genres': ['rock'], 'producer_ids': []}</favourite_tracks>
+      <favourite_albums>{'id': 'album_1', 'title': 'Power Music', 'contents': [{'id': 'track_1', 'title': 'Marusya', 'duration': 240, 'creator_id': 'artist_1', 'collaborator_ids': [], 'source_id': None, 'genres': ['rock'], 'producer_ids': []}], 'creator_id': 'artist_1', 'collaborator_ids': [], 'genres': ['rock']}</favourite_albums>
+      <favourite_artists>{'id': 'artist_1', 'name': 'Rockman', 'email': 'rockman@gmail.com', 'tracks': [], 'albums': [], 'collabed_tracks': [], 'collabed_albums': [], 'produced_tracks': []}</favourite_artists>
+      <favourite_audiobooks>{'id': 'book_1', 'title': 'Релиз в продакшен без ошибок', 'contents': [{'id': 'chapter_1', 'title': 'Глава 1', 'duration': 300, 'creator_id': 'artist_2', 'collaborator_ids': [], 'source_id': 'book_1', 'narrator_ids': ['artist_2']}, {'id': 'chapter_1', 'title': 'Глава 1', 'duration': 300, 'creator_id': 'artist_2', 'collaborator_ids': [], 'source_id': 'book_1', 'narrator_ids': ['artist_2']}], 'creator_id': 'author_2', 'collaborator_ids': [], 'genres': []}</favourite_audiobooks>
    </item>
    <item>
       <id>artist_1</id>
@@ -55,7 +56,7 @@
    <item>
       <id>book_1</id>
       <title>Релиз в продакшен без ошибок</title>
-      <contents>{'id': 'chapter_1', 'title': 'Глава 1', 'duration': 300, 'creator_id': 'artist_2', 'collaborator_ids': [], 'source_id': 'book_1', 'narrator_ids': ['artist_2']}</contents>
+      <contents>{'id': 'chapter_1', 'title': 'Глава 1', 'duration': 300, 'creator_id': 'artist_2', 'collaborator_ids': [], 'source_id': 'book_1', 'narrator_ids': ['artist_2']},{'id': 'chapter_1', 'title': 'Глава 1', 'duration': 300, 'creator_id': 'artist_2', 'collaborator_ids': [], 'source_id': 'book_1', 'narrator_ids': ['artist_2']}</contents>
       <creator_id>author_2</creator_id>
       <collaborator_ids/>
       <genres/>

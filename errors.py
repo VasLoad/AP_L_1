@@ -14,15 +14,15 @@ class EmptyValueError(DataError):
 class InvalidTypeError(DataError):
     """Ошибка неверного типа данных"""
 
-    def __init__(self, field_name: str, expected_type: str, actual_type: str):
-        super().__init__(f"Неверный тип данных для поля \"{field_name}\": ожидался {expected_type}, получен {actual_type}.")
+    def __init__(self, field_name: str, expected_type: type, actual_type: type):
+        super().__init__(f"Неверный тип данных для поля \"{field_name}\": ожидался {expected_type.__name__}, получен {actual_type.__name__}.")
 
 
 class InvalidElementTypeError(DataError):
     """Ошибка неверного типа данных объекта списка"""
 
-    def __init__(self, field_name: str, expected_type: str):
-        super().__init__(f"Список \"{field_name}\" должен содержать только объекты типа {expected_type}.")
+    def __init__(self, field_name: str, expected_type: type):
+        super().__init__(f"Список \"{field_name}\" должен содержать только объекты типа {expected_type.__name__}.")
 
 
 class CustomIndexError(DataError):

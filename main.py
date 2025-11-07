@@ -853,33 +853,43 @@ class Collection(Serializable, ABC):
 
         self._contents = value
 
+    @property
+    def collaborator_ids(self) -> List[str]:
+        return self._collaborator_ids.copy()
+
     def add_content(self, content: 'Content'):
         self._contents.append(content)
+        if not isinstance(content, Content):
+            raise InvalidTypeError("content", Content, type(content))
 
-        self.update()
+        if content not in self._contents:
+            self._contents.append(content)
+
+            self._update()
 
     def remove_content(self, content: 'Content'):
         self._contents.remove(content)
+        if not isinstance(content, Content):
+            raise InvalidTypeError("content", Content, type(content))
 
-        self.update()
+        if content in self._contents:
+            self._contents.remove(content)
+        else:
+            print(f"Контент {getattr(content, "title", "None")} не найден.")
 
     def pop_content(self, index: int = 0) -> Optional['Content']:
+        if not self._contents:
+            print("Список контента пуст.")
+
+            return None
         try:
-            content = self._contents.pop(index)
-
-            self.update()
-
-            return content
+            return self._contents.pop(index)
         except IndexError:
             print(CustomIndexError())
 
             return None
 
-    @property
-    def collaborator_ids(self) -> List[str]:
-        return self._collaborator_ids.copy()
-
-    def refresh_collaborator_ids(self):
+    def _refresh_collaborator_ids(self):
         new_collaborator_ids = set()
 
         for content in self._contents:
@@ -889,8 +899,8 @@ class Collection(Serializable, ABC):
 
         self._collaborator_ids = list(new_collaborator_ids)
 
-    def update(self):
-        self.refresh_collaborator_ids()
+    def _update(self):
+        self._refresh_collaborator_ids()
 
     # @collaborator_ids.setter
     # def collaborator_ids(self, value: List[str]):
@@ -932,7 +942,7 @@ class Album(Collection):
 
         self._genres = genres or []
         if not self._genres:
-            self.refresh_genres()
+            self._refresh_genres()
 
     @property
     def album_id(self) -> str:
@@ -942,7 +952,7 @@ class Album(Collection):
     def genres(self) -> List[TrackGenre]:
         return self._genres.copy()
 
-    def refresh_genres(self):
+    def _refresh_genres(self):
         new_genres = set()
 
         for track in self.contents:
@@ -952,10 +962,10 @@ class Album(Collection):
 
         self._genres = list(new_genres)
 
-    def update(self):
-        self.refresh_collaborator_ids()
+    def _update(self):
+        self._refresh_collaborator_ids()
 
-        self.refresh_genres()
+        self._refresh_genres()
 
     def serialize(self) -> Dict[str, Any]:
         data = super().serialize()
@@ -986,22 +996,35 @@ class Playlist(Collection):
     """
 
     def __init__(self, playlist_id: str, title: str, tracks: List['Track'], owner_id: str,
-                 genres: Optional[List[TrackGenre]] = None):
+                 description: Optional[str] = None, genres: Optional[List[TrackGenre]] = None):
         super().__init__(playlist_id, title, tracks, owner_id)
+
+        self._description = description or ""
 
         self._genres = genres or []
         if not self._genres:
-            self.refresh_genres()
+            self._refresh_genres()
 
     @property
     def playlist_id(self) -> str:
         return self.collection_id
 
     @property
+    def description(self) -> str:
+        return self._description
+
+    @description.setter
+    def description(self, value: str):
+        self._description = value
+
+    def clear_description(self):
+        self.description = ""
+
+    @property
     def genres(self) -> List[TrackGenre]:
         return self._genres.copy()
 
-    def refresh_genres(self):
+    def _refresh_genres(self):
         new_genres = set()
 
         for track in self.contents:
@@ -1011,15 +1034,16 @@ class Playlist(Collection):
 
         self._genres = list(new_genres)
 
-    def update(self):
-        self.refresh_collaborator_ids()
+    def _update(self):
+        self._refresh_collaborator_ids()
 
-        self.refresh_genres()
+        self._refresh_genres()
 
     def serialize(self) -> Dict[str, Any]:
         data = super().serialize()
 
         data.update({
+            "description": self._description,
             "genres": [genre.value for genre in self._genres]
         })
 
@@ -1032,6 +1056,7 @@ class Playlist(Collection):
             title=data.get("title"),
             tracks=[Track.deserialize(t) for t in data.get("contents", [])],
             owner_id=data.get("creator_id"),
+            description=data.get("description"),
             genres=[TrackGenre(genre) for genre in data.get("genres", [])]
         )
 
@@ -1044,22 +1069,33 @@ class AudioBook(Collection):
     """
 
     def __init__(self, audiobook_id: str, title: str, chapters: List['AudioBookChapter'], author_id: str,
-                 genres: Optional[List['AudioBookGenre']] = None):
+                 chapters_count: Optional[int] = None, genres: Optional[List['AudioBookGenre']] = None):
         super().__init__(audiobook_id, title, chapters, author_id)
+
+        self._chapters_count = chapters_count or []
+        if not self._chapters_count:
+            self._refresh_chapters_count()
 
         self._genres = genres or []
         if not self._genres:
-            self.refresh_genres()
+            self._refresh_genres()
 
     @property
     def audiobook_id(self) -> str:
         return self.collection_id
 
     @property
+    def chapters_count(self) -> int:
+        return self._chapters_count
+
+    @property
     def genres(self) -> List[AudioBookGenre]:
         return self._genres.copy()
 
-    def refresh_genres(self):
+    def _refresh_chapters_count(self):
+        self._chapters_count = len(self.contents)
+
+    def _refresh_genres(self):
         new_genres = set()
 
         for track in self.contents:
@@ -1069,15 +1105,18 @@ class AudioBook(Collection):
 
         self._genres = list(new_genres)
 
-    def update(self):
-        self.refresh_collaborator_ids()
+    def _update(self):
+        self._refresh_collaborator_ids()
 
-        self.refresh_genres()
+        self._refresh_chapters_count()
+
+        self._refresh_genres()
 
     def serialize(self) -> Dict[str, Any]:
         data = super().serialize()
 
         data.update({
+            "chapters_count": self._chapters_count,
             "genres": [genre.value for genre in self._genres]
         })
 
@@ -1090,6 +1129,7 @@ class AudioBook(Collection):
             title=data.get("title"),
             chapters=[AudioBookChapter.deserialize(a) for a in data.get("contents", [])],
             author_id=data.get("creator_id"),
+            chapters_count=data.get("chapters_count"),
             genres=[AudioBookGenre(genre) for genre in data.get("genres", [])]
         )
 
@@ -1147,7 +1187,7 @@ class Content(Serializable):
         self._duration = value
 
     @property
-    def artist_id(self) -> str:
+    def creator_id(self) -> str:
         return self._creator_id
 
     @property
@@ -1165,8 +1205,36 @@ class Content(Serializable):
         return self._source_id
 
     def add_collaborator_id(self, collaborator_id: str):
+        self._collaborator_ids.append(collaborator_id)
+        if not isinstance(collaborator_id, str):
+            raise InvalidTypeError("collaborator_id", str, type(collaborator_id))
+
+        validate_str(collaborator_id, "collaborator_id")
+
         if collaborator_id not in self._collaborator_ids:
             self._collaborator_ids.append(collaborator_id)
+
+    def remove_collaborator_id(self, collaborator_id: str):
+        self._collaborator_ids.remove(collaborator_id)
+        if not isinstance(collaborator_id, str):
+            raise InvalidTypeError("content", str, type(collaborator_id))
+
+        if collaborator_id in self._collaborator_ids:
+            self._collaborator_ids.remove(collaborator_id)
+        else:
+            print(f"ID коллаборатора {collaborator_id} не найден.")
+
+    def pop_collaborator_id(self, index: int = 0) -> Optional[str]:
+        if not self._collaborator_ids:
+            print("Список коллабораторов пуст.")
+
+            return None
+        try:
+            return self._collaborator_ids.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
 
     def serialize(self) -> Dict[str, Any]:
         data = {
@@ -1227,13 +1295,67 @@ class Track(Content):
 
         self._producer_ids = value
 
-    def add_genre(self, genre: TrackGenre):
+    def add_genre(self, genre: 'TrackGenre'):
+        self._genres.append(genre)
+        if not isinstance(genre, TrackGenre):
+            raise InvalidTypeError("genre", TrackGenre, type(genre))
+
         if genre not in self._genres:
             self._genres.append(genre)
 
-    def add_producer_id(self, producer_id):
+    def remove_genre(self, genre: 'TrackGenre'):
+        self._genres.remove(genre)
+        if not isinstance(genre, TrackGenre):
+            raise InvalidTypeError("genre", TrackGenre, type(genre))
+
+        if genre in self._genres:
+            self._genres.remove(genre)
+        else:
+            print(f"Жанр {genre.value} не найден.")
+
+    def pop_genre(self, index: int = 0) -> Optional['TrackGenre']:
+        if not self._genres:
+            print("Список жанров пуст.")
+
+            return None
+        try:
+            return self._genres.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
+
+    def add_producer_id(self, producer_id: str):
+        self._producer_ids.append(producer_id)
+        if not isinstance(producer_id, str):
+            raise InvalidTypeError("producer_id", str, type(producer_id))
+
+        validate_str(producer_id, "producer_id")
+
         if producer_id not in self._producer_ids:
             self._producer_ids.append(producer_id)
+
+    def remove_producer_id(self, producer_id: str):
+        self._producer_ids.remove(producer_id)
+        if not isinstance(producer_id, str):
+            raise InvalidTypeError("producer_id", str, type(producer_id))
+
+        if producer_id in self._producer_ids:
+            self._producer_ids.remove(producer_id)
+        else:
+            print(f"ID продюсера {producer_id} не найдено.")
+
+    def pop_producer_id(self, index: int = 0) -> Optional[str]:
+        if not self._producer_ids:
+            print("Список ID продюсеров пуст.")
+
+            return None
+        try:
+            return self._producer_ids.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
 
     def serialize(self) -> Dict[str, Any]:
         data = super().serialize()
@@ -1283,8 +1405,36 @@ class AudioBookChapter(Content):
         self._narrator_ids = value
 
     def add_narrator_id(self, narrator_id: str):
+        self._narrator_ids.append(narrator_id)
+        if not isinstance(narrator_id, str):
+            raise InvalidTypeError("narrator_id", str, type(narrator_id))
+
+        validate_str(narrator_id, "narrator_id")
+
         if narrator_id not in self._narrator_ids:
             self._narrator_ids.append(narrator_id)
+
+    def remove_narrator_id(self, narrator_id: str):
+        self._narrator_ids.remove(narrator_id)
+        if not isinstance(narrator_id, str):
+            raise InvalidTypeError("narrator_id", str, type(narrator_id))
+
+        if narrator_id in self._narrator_ids:
+            self._narrator_ids.remove(narrator_id)
+        else:
+            print(f"ID рассказчика {narrator_id} не найдено.")
+
+    def pop_producer_id(self, index: int = 0) -> Optional[str]:
+        if not self._narrator_ids:
+            print("Список ID рассказчиков пуст.")
+
+            return None
+        try:
+            return self._narrator_ids.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
 
     def serialize(self) -> Dict[str, Any]:
         data = super().serialize()
@@ -1315,14 +1465,14 @@ class RepeatModeValues(Enum):
 
 
 class MusicPlayer(Serializable):
-    """Класс, описывающий музыкальный плеер"""
+    """Класс музыкального плеера"""
 
     def __init__(self, music_player_id: str, user: 'User', current_track: Optional['Track'] = None,
                  current_playlist: Optional['Playlist'] = None, is_playing: Optional[bool] = False,
                  volume: Optional[float] = 0.8, current_track_position: Optional[timedelta] = timedelta(seconds=0),
                  shuffle_mode: Optional[bool] = False, repeat_mode: Optional[RepeatModeValues] = RepeatModeValues.NONE,
-                 playback_speed: Optional[float] = 1, history: Optional[List[Union['Track', 'AudioBookChapter']]] = None,
-                 start_time: Optional[float] = None):
+                 playback_speed: Optional[float] = 1.0, history: Optional[List[Union['Track', 'AudioBookChapter']]] = None,
+                 start_time: Optional[float] = 0.0):
         self._music_player_id = music_player_id
         self._user = user
 
@@ -1401,7 +1551,7 @@ class MusicPlayer(Serializable):
 
         return f"{MUSIC_PLAYER_PREFIX} {state}: {self._current_track.title} [{pos}/{dur} сек.] Громкость: {vol}%"
 
-    def load_playlist(self, playlist: 'Playlist'):
+    def load_playlist(self, playlist: Union['Playlist', 'AudioBook']):
         self._current_playlist = playlist
         self._current_track = playlist.contents[0] if playlist.contents else None
 
@@ -1413,7 +1563,7 @@ class MusicPlayer(Serializable):
 
         print(f"{MUSIC_PLAYER_PREFIX} Загружен плейлист '{playlist.title}'")
 
-    def play(self, track: Optional['Track'] = None):
+    def play(self, track: Optional[Union['Track', 'AudioBookChapter']] = None):
         if track:
             self._current_track = track
 
@@ -1498,8 +1648,8 @@ class MusicPlayer(Serializable):
         prev_track = self._history.pop()
         self.play(prev_track)
 
-    def set_volume(self, value: float):
-        self._volume = max(0.0, min(1.0, value))
+    def set_volume(self, volume: float):
+        self._volume = max(0.0, min(1.0, volume))
 
         vol = int(self._volume * 100)
 
@@ -1634,6 +1784,7 @@ if __name__ == "__main__":
         title="Ночь в неоновом городе",
         tracks=[track],
         owner_id=user.user_id,
+        description="Описание.",
         genres=[TrackGenre.ELECTRONIC]
     )
 

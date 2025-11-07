@@ -1,0 +1,362 @@
+[
+   {
+      "music_player_id": "mp_001",
+      "user": {
+         "id": "usr_001",
+         "name": "Александра Ветрова",
+         "email": "alex.vetrova@example.com",
+         "subscribed": true,
+         "playlists": [
+            {
+               "id": "pl_001",
+               "title": "Ночь в неоновом городе",
+               "contents": [
+                  {
+                     "id": "trk_001",
+                     "title": "Midnight Echo",
+                     "duration": 222,
+                     "creator_id": "art_001",
+                     "collaborator_ids": [
+                        "art_002"
+                     ],
+                     "source_id": "alb_001",
+                     "genres": [
+                        "electronic",
+                        "pop"
+                     ],
+                     "producer_ids": [
+                        "prod_001",
+                        "prod_002"
+                     ]
+                  }
+               ],
+               "creator_id": "usr_001",
+               "collaborator_ids": [],
+               "description": "Описание.",
+               "genres": [
+                  "electronic"
+               ]
+            }
+         ],
+         "favourite_tracks": [
+            {
+               "id": "trk_001",
+               "title": "Midnight Echo",
+               "duration": 222,
+               "creator_id": "art_001",
+               "collaborator_ids": [
+                  "art_002"
+               ],
+               "source_id": "alb_001",
+               "genres": [
+                  "electronic",
+                  "pop"
+               ],
+               "producer_ids": [
+                  "prod_001",
+                  "prod_002"
+               ]
+            }
+         ],
+         "favourite_albums": [
+            {
+               "id": "alb_001",
+               "title": "Synthetic Dreams",
+               "contents": [
+                  {
+                     "id": "trk_001",
+                     "title": "Midnight Echo",
+                     "duration": 222,
+                     "creator_id": "art_001",
+                     "collaborator_ids": [
+                        "art_002"
+                     ],
+                     "source_id": "alb_001",
+                     "genres": [
+                        "electronic",
+                        "pop"
+                     ],
+                     "producer_ids": [
+                        "prod_001",
+                        "prod_002"
+                     ]
+                  }
+               ],
+               "creator_id": "art_001",
+               "collaborator_ids": [
+                  "art_002"
+               ],
+               "genres": [
+                  "electronic",
+                  "pop"
+               ]
+            }
+         ],
+         "favourite_artists": [
+            {
+               "id": "art_001",
+               "name": "Neon Pulse",
+               "email": "contact@neonpulse.band",
+               "tracks": [
+                  {
+                     "type": "Track",
+                     "data": {
+                        "id": "trk_001",
+                        "title": "Midnight Echo",
+                        "duration": 222,
+                        "creator_id": "art_001",
+                        "collaborator_ids": [
+                           "art_002"
+                        ],
+                        "source_id": "alb_001",
+                        "genres": [
+                           "electronic",
+                           "pop"
+                        ],
+                        "producer_ids": [
+                           "prod_001",
+                           "prod_002"
+                        ]
+                     }
+                  }
+               ],
+               "albums": [
+                  {
+                     "type": "Album",
+                     "data": {
+                        "id": "alb_001",
+                        "title": "Synthetic Dreams",
+                        "contents": [
+                           {
+                              "id": "trk_001",
+                              "title": "Midnight Echo",
+                              "duration": 222,
+                              "creator_id": "art_001",
+                              "collaborator_ids": [
+                                 "art_002"
+                              ],
+                              "source_id": "alb_001",
+                              "genres": [
+                                 "electronic",
+                                 "pop"
+                              ],
+                              "producer_ids": [
+                                 "prod_001",
+                                 "prod_002"
+                              ]
+                           }
+                        ],
+                        "creator_id": "art_001",
+                        "collaborator_ids": [
+                           "art_002"
+                        ],
+                        "genres": [
+                           "electronic",
+                           "pop"
+                        ]
+                     }
+                  }
+               ],
+               "collabed_tracks": [
+                  {
+                     "type": "AudioBookChapter",
+                     "data": {
+                        "id": "chp_001",
+                        "title": "Глава 1: Первые шаги в коде",
+                        "duration": 1095,
+                        "creator_id": "art_001",
+                        "collaborator_ids": [
+                           "voice_001"
+                        ],
+                        "source_id": "abk_001",
+                        "narrator_ids": [
+                           "voice_001",
+                           "voice_002"
+                        ]
+                     }
+                  }
+               ],
+               "collabed_albums": [
+                  {
+                     "type": "AudioBook",
+                     "data": {
+                        "id": "abk_001",
+                        "title": "Python: От новичка до мастера",
+                        "contents": [
+                           {
+                              "id": "chp_001",
+                              "title": "Глава 1: Первые шаги в коде",
+                              "duration": 1095,
+                              "creator_id": "art_001",
+                              "collaborator_ids": [
+                                 "voice_001"
+                              ],
+                              "source_id": "abk_001",
+                              "narrator_ids": [
+                                 "voice_001",
+                                 "voice_002"
+                              ]
+                           }
+                        ],
+                        "creator_id": "art_001",
+                        "collaborator_ids": [],
+                        "chapters_count": 1,
+                        "genres": [
+                           "tech",
+                           "comedy"
+                        ]
+                     }
+                  }
+               ],
+               "produced_tracks": [
+                  {
+                     "type": "Track",
+                     "data": {
+                        "id": "trk_001",
+                        "title": "Midnight Echo",
+                        "duration": 222,
+                        "creator_id": "art_001",
+                        "collaborator_ids": [
+                           "art_002"
+                        ],
+                        "source_id": "alb_001",
+                        "genres": [
+                           "electronic",
+                           "pop"
+                        ],
+                        "producer_ids": [
+                           "prod_001",
+                           "prod_002"
+                        ]
+                     }
+                  }
+               ]
+            }
+         ],
+         "favourite_audiobooks": [
+            {
+               "id": "abk_001",
+               "title": "Python: От новичка до мастера",
+               "contents": [
+                  {
+                     "id": "chp_001",
+                     "title": "Глава 1: Первые шаги в коде",
+                     "duration": 1095,
+                     "creator_id": "art_001",
+                     "collaborator_ids": [
+                        "voice_001"
+                     ],
+                     "source_id": "abk_001",
+                     "narrator_ids": [
+                        "voice_001",
+                        "voice_002"
+                     ]
+                  }
+               ],
+               "creator_id": "art_001",
+               "collaborator_ids": [],
+               "chapters_count": 1,
+               "genres": [
+                  "tech",
+                  "comedy"
+               ]
+            }
+         ]
+      },
+      "current_track": {
+         "id": "trk_001",
+         "title": "Midnight Echo",
+         "duration": 222,
+         "creator_id": "art_001",
+         "collaborator_ids": [
+            "art_002"
+         ],
+         "source_id": "alb_001",
+         "genres": [
+            "electronic",
+            "pop"
+         ],
+         "producer_ids": [
+            "prod_001",
+            "prod_002"
+         ]
+      },
+      "current_playlist": {
+         "id": "pl_001",
+         "title": "Ночь в неоновом городе",
+         "contents": [
+            {
+               "id": "trk_001",
+               "title": "Midnight Echo",
+               "duration": 222,
+               "creator_id": "art_001",
+               "collaborator_ids": [
+                  "art_002"
+               ],
+               "source_id": "alb_001",
+               "genres": [
+                  "electronic",
+                  "pop"
+               ],
+               "producer_ids": [
+                  "prod_001",
+                  "prod_002"
+               ]
+            }
+         ],
+         "creator_id": "usr_001",
+         "collaborator_ids": [],
+         "description": "Описание.",
+         "genres": [
+            "electronic"
+         ]
+      },
+      "is_playing": true,
+      "volume": 0.72,
+      "current_track_position": 83.0,
+      "shuffle_mode": true,
+      "repeat_mode": "all",
+      "playback_speed": 1.25,
+      "history": [
+         {
+            "type": "Track",
+            "data": {
+               "id": "trk_001",
+               "title": "Midnight Echo",
+               "duration": 222,
+               "creator_id": "art_001",
+               "collaborator_ids": [
+                  "art_002"
+               ],
+               "source_id": "alb_001",
+               "genres": [
+                  "electronic",
+                  "pop"
+               ],
+               "producer_ids": [
+                  "prod_001",
+                  "prod_002"
+               ]
+            }
+         },
+         {
+            "type": "AudioBookChapter",
+            "data": {
+               "id": "chp_001",
+               "title": "Глава 1: Первые шаги в коде",
+               "duration": 1095,
+               "creator_id": "art_001",
+               "collaborator_ids": [
+                  "voice_001"
+               ],
+               "source_id": "abk_001",
+               "narrator_ids": [
+                  "voice_001",
+                  "voice_002"
+               ]
+            }
+         }
+      ],
+      "start_time": 1762505866.7550912
+   }
+]

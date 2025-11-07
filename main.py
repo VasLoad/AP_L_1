@@ -10,7 +10,7 @@ import random
 
 from config import DEFAULT_FILE_INDENT, MUSIC_PLAYER_PREFIX
 from errors import DataError, EmptyValueError, InvalidTypeError, CustomIndexError
-from utils import validate_str, validate_list
+from utils import validate_str, validate_list, deserialize_union
 
 
 class TrackGenre(Enum):
@@ -31,6 +31,7 @@ class AudioBookGenre(Enum):
     TRILLER = "triller"
     ROMAN = "roman"
     NOVELL = "novell"
+    TECH = "tech"
 
 
 class Permission(Enum):
@@ -74,57 +75,90 @@ class FileHandler(ABC):
 
 
 class JSONFileHandler(FileHandler):
-    """Класс, описывающий обработчик файлов .JSON"""
+    """Обработчик файлов .JSON"""
 
     def save(self, data: List[Serializable], filename: str):
         with open(filename, "w", encoding="utf-8") as file:
             json.dump([item.serialize() for item in data], file, indent=DEFAULT_FILE_INDENT, ensure_ascii=False)
 
 
-    def load(self, filename: str) -> List[Dict[str, Any]]:
+    @classmethod
+    def load(cls, filename: str) -> List[Dict[str, Any]]:
         with open(filename, "r", encoding="utf-8") as file:
             return json.load(file)
 
-
 class XMLFileHandler(FileHandler):
-    """Класс, описывающий обработчик файлов .XML"""
+    """Обработчик XML-файлов с поддержкой вложенных объектов и Union-типов"""
 
     def save(self, data: List[Serializable], filename: str):
         root = ElementTree.Element("data")
+
         for item in data:
-            item_element = ElementTree.SubElement(root, "item")
-            for key, value in item.serialize().items():
-                child = ElementTree.SubElement(item_element, key)
-                if isinstance(value, list):
-                    child.text = ",".join(str(v) for v in value)
-                else:
-                    child.text = str(value)
+            item_elem = ElementTree.SubElement(root, "item")
 
-        tree = ElementTree.tostring(root, encoding="utf-8")
-        decorated_tree = minidom.parseString(tree).toprettyxml(indent=" " * DEFAULT_FILE_INDENT)
+            self._serialize_value(item_elem, item.serialize())
 
-        with open(filename, "w", encoding="utf-8") as file:
-            file.write(decorated_tree)
+        rough_string = ElementTree.tostring(root, encoding="utf-8")
+        reparsed = minidom.parseString(rough_string)
+        pretty_xml = reparsed.toprettyxml(indent=" " * DEFAULT_FILE_INDENT, encoding="utf-8").decode()
 
-    def load(self, filename: str) -> List[Dict[str, Any]]:
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(pretty_xml)
+
+    def _serialize_value(self, parent: ElementTree.Element, value: Any):
+        if isinstance(value, dict):
+            for k, v in value.items():
+                child = ElementTree.SubElement(parent, k)
+
+                self._serialize_value(child, v)
+        elif isinstance(value, list):
+            for item in value:
+                child = ElementTree.SubElement(parent, "item")
+
+                self._serialize_value(child, item)
+        else:
+            parent.text = json.dumps(value, ensure_ascii=False) if value is not None else ""
+
+    @classmethod
+    def load(cls, filename: str) -> List[Dict[str, Any]]:
         tree = ElementTree.parse(filename)
         root = tree.getroot()
-
         result = []
-        for item_element in root.findall("item"):
-            item_data = {}
-            for child in item_element:
-                if child.text and "," in child.text:
-                    item_data[child.tag] = child.text.split(",")
-                else:
-                    item_data[child.tag] = child.text
-            result.append(item_data)
+
+        for item_elem in root.findall("item"):
+            result.append(cls._deserialize_element(item_elem))
 
         return result
 
+    @classmethod
+    def _deserialize_element(cls, elem: ElementTree.Element) -> Any:
+        data = {}
+
+        children = list(elem)
+
+        if not children:
+            text = (elem.text or "").strip()
+
+            if not text:
+                return None
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                return text
+
+        if all(child.tag == "item" for child in children):
+            return [cls._deserialize_element(child) for child in children]
+        else:
+            for child in children:
+                key = child.tag
+                value = cls._deserialize_element(child)
+                data[key] = value
+
+            return data
+
 
 class Person(Serializable, ABC):
-    """Базовый класс, описывающий человека в системе"""
+    """Абстрактный класс, описывающий человека в системе"""
 
     def __init__(self, person_id: str, name: str, email: str):
         self._person_id = person_id
@@ -444,7 +478,7 @@ class Artist(Person):
 
     def __init__(self, artist_id: str, name: str, email: str,
                  tracks: Optional[List[Union['Track', 'AudioBookChapter']]] = None, albums: Optional[List[Union['Album', 'AudioBook']]] = None,
-                 collabed_tracks: Optional[List[Union['Track', 'AudioBookChapter']]] = None, collabed_albums:Optional[List[Union['Album', 'AudioBook']]] = None,
+                 collabed_tracks: Optional[List[Union['Track', 'AudioBookChapter']]] = None, collabed_albums: Optional[List[Union['Album', 'AudioBook']]] = None,
                  produced_tracks: Optional[List[Union['Track', 'AudioBookChapter']]] = None):
         super().__init__(artist_id, name, email)
 
@@ -511,14 +545,14 @@ class Artist(Person):
         self._produced_tracks = value
 
     def add_track(self, track: Union['Track','AudioBookChapter']):
-        if not isinstance(track, Union[Track, AudioBookChapter]):
+        if not isinstance(track, (Track, AudioBookChapter)):
             raise InvalidTypeError("track", Union[Track, AudioBookChapter], type(track))
 
         if track not in self._tracks:
             self._tracks.append(track)
 
     def remove_track(self, track: Union['Track', 'AudioBookChapter']):
-        if not isinstance(track, Union[Track, AudioBookChapter]):
+        if not isinstance(track, (Track, AudioBookChapter)):
             raise InvalidTypeError("track", Union[Track, AudioBookChapter], type(track))
 
         if track in self._tracks:
@@ -546,7 +580,7 @@ class Artist(Person):
             self._albums.append(album)
 
     def remove_album(self, album: Union['Album', 'AudioBook']):
-        if not isinstance(album, Union[Album, AudioBook]):
+        if not isinstance(album, (Album, AudioBook)):
             raise InvalidTypeError("album", Union[Album, AudioBook], type(album))
 
         if album in self._albums:
@@ -567,14 +601,14 @@ class Artist(Person):
             return None
 
     def add_collabed_track(self, collabed_track: Union['Track','AudioBookChapter']):
-        if not isinstance(collabed_track, Union[Track, AudioBookChapter]):
+        if not isinstance(collabed_track, (Track, AudioBookChapter)):
             raise InvalidTypeError("collabed_track", Union[Track, AudioBookChapter], type(track))
 
         if collabed_track not in self._collabed_tracks:
             self._collabed_tracks.append(collabed_track)
 
     def remove_collabed_track(self, collabed_track: Union['Track', 'AudioBookChapter']):
-        if not isinstance(collabed_track, Union[Track, AudioBookChapter]):
+        if not isinstance(collabed_track, (Track, AudioBookChapter)):
             raise InvalidTypeError("collabed_track", Union[Track, AudioBookChapter], type(collabed_track))
 
         if collabed_track in self._collabed_tracks:
@@ -595,14 +629,14 @@ class Artist(Person):
             return None
 
     def add_collabed_album(self, collabed_album: Union['Album', 'AudioBook']):
-        if not isinstance(collabed_album, Union[Album, AudioBook]):
+        if not isinstance(collabed_album, (Album, AudioBook)):
             raise InvalidTypeError("collabed_album", Union[Album, AudioBook], type(collabed_album))
 
         if collabed_album not in self._collabed_albums:
             self._collabed_albums.append(collabed_album)
 
     def remove_collabed_album(self, collabed_album: Union['Album', 'AudioBook']):
-        if not isinstance(collabed_album, Union[Album, AudioBook]):
+        if not isinstance(collabed_album, (Album, AudioBook)):
             raise InvalidTypeError("collabed_album", Union[Album, AudioBook], type(collabed_album))
 
         if collabed_album in self._collabed_albums:
@@ -623,14 +657,14 @@ class Artist(Person):
             return None
 
     def add_produced_track(self, produced_track: Union['Track', 'AudioBookChapter']):
-        if not isinstance(album, Union[Track, AudioBookChapter]):
+        if not isinstance(produced_track, (Track, AudioBookChapter)):
             raise InvalidTypeError("produced_track", Union[Track, AudioBookChapter], type(produced_track))
 
         if produced_track not in self._produced_tracks:
             self._produced_tracks.append(produced_track)
 
     def remove_produced_track(self, produced_track: Union['Track', 'AudioBookChapter']):
-        if not isinstance(produced_track, Union[Track, AudioBookChapter]):
+        if not isinstance(produced_track, (Track, AudioBookChapter)):
             raise InvalidTypeError("produced_track", Union[Track, AudioBookChapter], type(produced_track))
 
         if produced_track in self._produced_tracks:
@@ -654,34 +688,55 @@ class Artist(Person):
         data = super().serialize()
 
         data.update({
-            "tracks": [track.serialize() for track in self._tracks],
-            "albums": [album.serialize() for album in self._albums],
-            "collabed_tracks": [track.serialize() for track in self._collabed_tracks],
-            "collabed_albums": [album.serialize() for album in self._collabed_albums],
-            "produced_tracks": [track.serialize() for track in self._produced_tracks]
+            "tracks": [
+                {
+                    "type": type(track).__name__,
+                    "data": track.serialize()
+                } for track in self._tracks],
+            "albums": [
+                {
+                    "type": type(album).__name__,
+                    "data": album.serialize()
+                } for album in self._albums],
+            "collabed_tracks": [
+                {
+                    "type": type(collabed_track).__name__,
+                    "data": collabed_track.serialize()
+                } for collabed_track in self._collabed_tracks],
+            "collabed_albums": [
+                {
+                    "type": type(collabed_album).__name__,
+                    "data": collabed_album.serialize()
+                } for collabed_album in self._collabed_albums],
+            "produced_tracks": [
+                {
+                    "type": type(produced_track).__name__,
+                    "data": produced_track.serialize()
+                } for produced_track in self._produced_tracks],
         })
 
         return data
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'Artist':
-        tracks_data = data.get("tracks", [])
-        albums_data = data.get("albums", [])
 
-        collabed_tracks_data = data.get("collabed_tracks", [])
-        collabed_albums_data = data.get("collabed_albums", [])
+        tracks = deserialize_union(data.get("tracks", []), [Track, AudioBookChapter])
+        albums = deserialize_union(data.get("albums", []), [Album, AudioBook])
 
-        produced_tracks_data = data.get("produced_tracks", [])
+        collabed_tracks = deserialize_union(data.get("collabed_tracks", []), [Track, AudioBookChapter])
+        collabed_albums = deserialize_union(data.get("collabed_albums", []), [Album, AudioBook])
+
+        produced_tracks = deserialize_union(data.get("produced_tracks", []), [Track, AudioBookChapter])
 
         return cls(
             artist_id=data.get("id"),
             name=data.get("name"),
             email=data.get("email"),
-            tracks=[Track.deserialize(track) for track in tracks_data],
-            albums=[Album.deserialize(album) for album in albums_data],
-            collabed_tracks=[Track.deserialize(track) for track in collabed_tracks_data],
-            collabed_albums=[Album.deserialize(album) for album in collabed_albums_data],
-            produced_tracks=[Track.deserialize(track) for track  in produced_tracks_data]
+            tracks=tracks,
+            albums=albums,
+            collabed_tracks=collabed_tracks,
+            collabed_albums=collabed_albums,
+            produced_tracks=produced_tracks
         )
 
 
@@ -706,6 +761,34 @@ class Admin(Person):
         validate_list(value, "permissions", Permission)
 
         self._permissions = value
+
+    def add_permission(self, permission: Permission):
+        if not isinstance(permission, Permission):
+            raise InvalidTypeError("permission", Permission, type(permission))
+
+        if permission not in self._permissions:
+            self._permissions.append(permission)
+
+    def remove_permission(self, permission: Permission):
+        if not isinstance(permission, Permission):
+            raise InvalidTypeError("permission", Permission, type(permission))
+
+        if permission in self._permissions:
+            self._permissions.remove(permission)
+        else:
+            print(f"Привилегия {permission.value} не найдена.")
+
+    def pop_permission(self, index: int = 0) -> Optional[Permission]:
+        if not self._permissions:
+            print("Список привилегий пуст.")
+
+            return None
+        try:
+            return self._permissions.pop(index)
+        except IndexError:
+            print(CustomIndexError())
+
+            return None
 
     def serialize(self) -> Dict[str, Any]:
         data = super().serialize()
@@ -1231,39 +1314,80 @@ class RepeatModeValues(Enum):
     ALL = "all"
 
 
-class MusicPlayer:
+class MusicPlayer(Serializable):
     """Класс, описывающий музыкальный плеер"""
 
-    def __init__(self, music_player_id: str, user: 'User'):
+    def __init__(self, music_player_id: str, user: 'User', current_track: Optional['Track'] = None,
+                 current_playlist: Optional['Playlist'] = None, is_playing: Optional[bool] = False,
+                 volume: Optional[float] = 0.8, current_track_position: Optional[timedelta] = timedelta(seconds=0),
+                 shuffle_mode: Optional[bool] = False, repeat_mode: Optional[RepeatModeValues] = RepeatModeValues.NONE,
+                 playback_speed: Optional[float] = 1, history: Optional[List[Union['Track', 'AudioBookChapter']]] = None,
+                 start_time: Optional[float] = None):
         self._music_player_id = music_player_id
         self._user = user
 
-        self._current_track: Optional['Track'] = None
-        self._current_playlist: Optional['Playlist'] = None
+        self._current_track = current_track
+        self._current_playlist = current_playlist
 
-        self._is_playing: bool = False
-        self._volume: float = 0.8
-        self._current_track_position: timedelta = timedelta(seconds=0)
+        self._is_playing = is_playing
+        self._volume = volume
+        self._current_track_position = current_track_position
 
-        self._shuffle_mode: bool = False
-        self._repeat_mode: RepeatModeValues = RepeatModeValues.NONE
-        self._playback_speed: float = 1.0
+        self._shuffle_mode = shuffle_mode
+        self._repeat_mode = repeat_mode
+        self._playback_speed = playback_speed
 
-        self._history: list['Track'] = []
+        self._history = history or []
 
-        self._start_time: Optional[float] = None
+        self._start_time = start_time
+
+    @property
+    def music_player_id(self) -> str:
+        return self._music_player_id
+
+    @property
+    def user(self) -> 'User':
+        return self._user
+
+    @property
+    def current_track(self) -> Optional[Union['Track', 'AudioBookChapter']]:
+        return self._current_track
+
+    @property
+    def current_playlist(self) -> Optional[Union['Playlist', 'AudioBook']]:
+        return self._current_playlist
 
     @property
     def is_playing(self) -> bool:
         return self._is_playing
 
     @property
-    def current_track(self) -> Optional['Track']:
-        return self._current_track
+    def volume(self) -> float:
+        return self._volume
 
     @property
-    def current_playlist(self) -> Optional['Playlist']:
-        return self._current_playlist
+    def current_track_position(self) -> timedelta:
+        return self._current_track_position
+
+    @property
+    def shuffle_mode(self) -> bool:
+        return self._shuffle_mode
+
+    @property
+    def repeat_mode(self) -> RepeatModeValues:
+        return self._repeat_mode
+
+    @property
+    def playback_speed(self) -> float:
+        return self._playback_speed
+
+    @property
+    def history(self) -> List[Union['Track', 'AudioBookChapter']]:
+        return self._history
+
+    @property
+    def start_time(self) -> float:
+        return self._start_time
 
     def status(self) -> str:
         if not self._current_track:
@@ -1403,151 +1527,239 @@ class MusicPlayer:
 
         print(f"{MUSIC_PLAYER_PREFIX} Скорость воспроизведения: x{speed}")
 
+    def serialize(self) -> Dict[str, Any]:
+        return {
+            "music_player_id": self._music_player_id,
+            "user": self._user.serialize(),
+            "current_track": self._current_track.serialize(),
+            "current_playlist": self._current_playlist.serialize(),
+            "is_playing": self.is_playing,
+            "volume": self._volume,
+            "current_track_position": self._current_track_position.total_seconds(),
+            "shuffle_mode": self._shuffle_mode,
+            "repeat_mode": self._repeat_mode.value,
+            "playback_speed": self._playback_speed,
+            "history": [
+                {
+                    "type": type(track).__name__,
+                    "data": track.serialize()
+                } for track in self._history],
+            "start_time": self._start_time
+        }
+
+    @classmethod
+    def deserialize(cls, data: Dict[str, Any]) -> 'MusicPlayer':
+        history = deserialize_union(data.get("history", []), [Track, AudioBookChapter])
+
+        return cls(
+            music_player_id=data.get("music_player_id"),
+            user=User.deserialize(data.get("user")),
+            current_track=Track.deserialize(data.get("current_track")),
+            current_playlist=Playlist.deserialize(data.get("current_playlist")),
+            is_playing=data.get("is_playing"),
+            volume=data.get("volume"),
+            current_track_position=timedelta(seconds=data.get("current_track_position", 0)),
+            shuffle_mode=data.get("shuffle_mode"),
+            repeat_mode=RepeatModeValues(data.get("repeat_mode")),
+            playback_speed=data.get("playback_speed"),
+            history=history,
+            start_time=data.get("start_time")
+        )
+
 
 if __name__ == "__main__":
-    filename = "data"
+    print("Запуск полной проверки сериализации/десериализации MusicPlayer...")
+    print("=" * 80)
+
+    print("1. Создание объектов с полным заполнением всех полей...")
 
     user = User(
-        user_id="user_1",
-        name="Slade",
-        email="slade@gmail.com",
+        user_id="usr_001",
+        name="Александра Ветрова",
+        email="alex.vetrova@example.com",
         subscribed=True
     )
 
-    assert isinstance(user, Person)
-    print("User наследует Person")
-
     artist = Artist(
-        artist_id="artist_1",
-        name="Rockman",
-        email="rockman@gmail.com"
+        artist_id="art_001",
+        name="Neon Pulse",
+        email="contact@neonpulse.band"
     )
-
-    user.add_favourite_artist(artist)
-
-    assert isinstance(artist, Person)
-    print("Artist наследует Person")
 
     admin = Admin(
-        admin_id="admin_1",
-        name="Admin",
-        email="admin@gmail.com",
-        permissions=[Permission.VIEW_USERS, Permission.EDIT_USERS]
+        admin_id="adm_001",
+        name="Root Admin",
+        email="root@musicapp.lv",
+        permissions=[
+            Permission.VIEW_USERS,
+            Permission.EDIT_USERS,
+            Permission.BAN_USERS,
+            Permission.SEE_ANALYTICS,
+            Permission.INVITE_ADMINS
+        ]
     )
-
-    assert isinstance(admin, Person)
-    print("Admin наследует Person")
 
     track = Track(
-        track_id="track_1",
-        title="Marusya",
-        genres=[TrackGenre.ROCK],
-        duration=timedelta(seconds=240),
-        artist_id=artist.artist_id
+        track_id="trk_001",
+        title="Midnight Echo",
+        genres=[TrackGenre.ELECTRONIC, TrackGenre.POP],
+        duration=timedelta(minutes=3, seconds=42),
+        artist_id=artist.artist_id,
+        collaborator_ids=["art_002"],
+        producer_ids=["prod_001", "prod_002"],
+        album_id="alb_001"
     )
-
-    assert isinstance(track, Content)
-    print("Track наследует Content")
-
-    user.add_favourite_track(track)
 
     chapter = AudioBookChapter(
-        chapter_id="chapter_1",
-        title="Глава 1",
-        duration=timedelta(minutes=5),
-        author_id="artist_2",
-        audio_book_id="book_1"
+        chapter_id="chp_001",
+        title="Глава 1: Первые шаги в коде",
+        duration=timedelta(minutes=18, seconds=15),
+        author_id=artist.artist_id,
+        audio_book_id="abk_001",
+        collaborator_ids=["voice_001"],
+        narrator_ids=["voice_001", "voice_002"]
     )
-
-    assert isinstance(chapter, Content)
-    print("AudioBookChapter наследует Content")
 
     album = Album(
-        album_id="album_1",
-        title="Power Music",
+        album_id="alb_001",
+        title="Synthetic Dreams",
         tracks=[track],
-        artist_id=artist.artist_id
+        artist_id=artist.artist_id,
+        collaborator_ids=["art_002"],
+        genres=[TrackGenre.ELECTRONIC, TrackGenre.POP]
     )
-
-    assert isinstance(album, Collection)
-    print("Album наследует Collection")
-
-    user.add_favourite_album(album)
 
     playlist = Playlist(
-        playlist_id="playlist_1",
-        title="Музыка без АП",
+        playlist_id="pl_001",
+        title="Ночь в неоновом городе",
         tracks=[track],
-        owner_id=user.user_id
+        owner_id=user.user_id,
+        genres=[TrackGenre.ELECTRONIC]
     )
-
-    assert isinstance(playlist, Collection)
-    print("Playlist наследует Collection")
-
-    user.add_playlist(playlist)
 
     audiobook = AudioBook(
-        audiobook_id="book_1",
-        title="Релиз в продакшен без ошибок",
+        audiobook_id="abk_001",
+        title="Python: От новичка до мастера",
         chapters=[chapter],
-        author_id="author_2"
+        author_id=artist.artist_id,
+        genres=[AudioBookGenre.TECH, AudioBookGenre.COMEDY]
     )
 
-    assert isinstance(audiobook, Collection)
-    print("AudioBook наследует Collection")
+    print("2. Установка связей между объектами...")
 
-    audiobook.add_content(chapter)
-
+    user.add_playlist(playlist)
+    user.add_favourite_track(track)
+    user.add_favourite_album(album)
+    user.add_favourite_artist(artist)
     user.add_favourite_audiobook(audiobook)
 
-    player = MusicPlayer("music_player_1", user)
-    player.load_playlist(playlist)
-    player.play()
-    player.pause()
-    player.next_track()
-    player.set_volume(0.5)
-    player.set_repeat_mode(RepeatModeValues.ALL)
-    player.set_playback_speed(1.25)
+    artist.add_track(track)
+    artist.add_album(album)
+    artist.add_collabed_track(chapter)
+    artist.add_collabed_album(audiobook)
+    artist.add_produced_track(track)
 
-    print("MusicPlayer работает")
+    print("3. Создание MusicPlayer с полной нагрузкой...")
 
-    objects = [user, artist, admin, track, album, playlist, audiobook]
+    player = MusicPlayer(
+        music_player_id="mp_001",
+        user=user,
+        current_track=track,
+        current_playlist=playlist,
+        is_playing=True,
+        volume=0.72,
+        current_track_position=timedelta(minutes=1, seconds=23),
+        shuffle_mode=True,
+        repeat_mode=RepeatModeValues.ALL,
+        playback_speed=1.25,
+        history=[track, chapter],
+        start_time=time.time() - 83
+    )
 
+    # Симуляция работы
+    # player.load_playlist(playlist)
+    # player.play(track)
+
+    print("4. Сохранение MusicPlayer...")
+
+    filename_base = "data"
     json_handler = JSONFileHandler()
     xml_handler = XMLFileHandler()
 
     # JSON
-    json_file = f"{filename}.json"
-    json_handler.save(objects, json_file)
-
-    print(f"JSON успешно сохранён в файл {json_file}")
-
-    loaded_json = json_handler.load(json_file)
-
-    assert isinstance(loaded_json, list)
-    print("JSON успешно загружен")
+    json_file = f"{filename_base}.json"
+    json_handler.save([player], json_file)  # Только один объект!
+    print(f"   JSON сохранён: {json_file}")
 
     # XML
-    xml_file = f"{filename}.xml"
-    xml_handler.save(objects, xml_file)
+    xml_file = f"{filename_base}.xml"
+    xml_handler.save([player], xml_file)
+    print(f"   XML сохранён: {xml_file}")
 
-    print(f"XML успешно сохранён в файл {xml_file}")
+    print("5. Загрузка и полная проверка восстановленного MusicPlayer...")
 
+    print("   Проверка JSON...")
+    loaded_json = json_handler.load(json_file)
+    assert len(loaded_json) == 1, "JSON должен содержать ровно 1 объект"
+    deserialized_json = MusicPlayer.deserialize(loaded_json[0])
+
+    print("   Проверка XML...")
     loaded_xml = xml_handler.load(xml_file)
+    assert len(loaded_xml) == 1, "XML должен содержать ровно 1 объект"
+    deserialized_xml = MusicPlayer.deserialize(loaded_xml[0])
 
-    assert isinstance(loaded_xml, list)
-    print("XML успешно загружен")
+    print("6. Глубокая проверка всех полей MusicPlayer...")
 
-    _ = Person.deserialize(user.serialize())
-    _ = User.deserialize(user.serialize())
-    _ = Artist.deserialize(artist.serialize())
-    _ = Admin.deserialize(admin.serialize())
-    _ = Track.deserialize(track.serialize())
-    _ = Album.deserialize(album.serialize())
-    _ = Playlist.deserialize(playlist.serialize())
-    _ = AudioBook.deserialize(audiobook.serialize())
-    _ = AudioBookChapter.deserialize(chapter.serialize())
 
-    print("Все классы успешно сериализуются и десериализуются")
+    def check_player(p, name):
+        print(f"   Проверка {name}:")
 
-    print("Проверка работоспособности завершена!")
+        assert p.music_player_id == "mp_001", "Неверный ID плеера"
+        assert p.is_playing is True, "Должно играть"
+        assert abs(p.volume - 0.72) < 1e-6, "Неверная громкость"
+        assert p.current_track_position == timedelta(minutes=1, seconds=23), "Неверная позиция"
+        assert p.shuffle_mode is True, "Shuffle должен быть включён"
+        assert p.repeat_mode == RepeatModeValues.ALL, "Неверный режим повтора"
+        assert abs(p.playback_speed - 1.25) < 1e-6, "Неверная скорость"
+        assert p.start_time is not None, "start_time должен быть"
+
+        assert p.current_track is not None, "current_track не должен быть None"
+        assert p.current_track.title == "Midnight Echo", "Неверный текущий трек"
+        assert TrackGenre.ELECTRONIC in p.current_track.genres, "Неверный жанр трека"
+
+        assert p.current_playlist is not None, "current_playlist не должен быть None"
+        assert p.current_playlist.title == "Ночь в неоновом городе", "Неверный плейлист"
+        assert len(p.current_playlist.contents) == 1, "Плейлист должен содержать 1 трек"
+
+        assert len(p.history) == 2, "История должна содержать 2 элемента"
+        assert isinstance(p.history[0], Track), "Первый в истории — должен быть Track"
+        assert isinstance(p.history[1], AudioBookChapter), "Второй — AudioBookChapter"
+        assert p.history[0].title == "Midnight Echo", "Неверный трек в истории"
+
+        assert p.user.user_id == "usr_001", "Неверный пользователь"
+        assert p.user.subscribed is True, "Пользователь должен быть подписан"
+        assert len(p.user.playlists) == 1, "У пользователя должен быть 1 плейлист"
+        assert len(p.user.favourite_tracks) == 1, "1 любимый трек"
+        assert len(p.user.favourite_albums) == 1, "1 любимый альбом"
+        assert len(p.user.favourite_artists) == 1, "1 любимый артист"
+        assert len(p.user.favourite_audiobooks) == 1, "1 любимая аудиокнига"
+
+        print(f"   {name}: ВСЁ ОК")
+
+
+    check_player(deserialized_json, "JSON")
+    check_player(deserialized_xml, "XML")
+
+    print("7. Проверка метода status()...")
+    status = player.status()
+    assert "Играет" in status, "Статус должен показывать 'Играет'"
+    assert "Midnight Echo" in status, "Название трека в статусе"
+    assert "Громкость: 72%" in status, "Громкость в статусе"
+    print("   status(): Работает корректно")
+
+    print("=" * 80)
+    print("ПРОВЕРКА ПРОЙДЕНА УСПЕШНО!")
+    print(f"Созданные файлы:")
+    print(f"   {json_file}")
+    print(f"   {xml_file}")
+    print("=" * 80)
